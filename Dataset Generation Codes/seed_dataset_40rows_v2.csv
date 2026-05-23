@@ -1,0 +1,41 @@
+seed_row_id,source,pH,temperature_C,TDS_mgl,DO_mgl,label,label_reason
+1,Kamruzzaman_2026_Table2,8.62,20.8,176,1.52,1,DO=1.52<4.0; pH=8.62>8.5
+2,Kamruzzaman_2026_Table2,8.36,20.51,178,1.81,1,DO=1.81<4.0
+3,Kamruzzaman_2026_Table2,8.35,20.95,184,1.42,1,DO=1.42<4.0
+4,Kamruzzaman_2026_Table2,7.85,21.55,178,2.24,1,DO=2.24<4.0
+5,Kamruzzaman_2026_Table2,7.78,21.53,178,2.21,1,DO=2.21<4.0
+6,Kamruzzaman_2026_Table2,8.16,21.0,178,2.37,1,DO=2.37<4.0
+7,Kamruzzaman_2026_Table2,7.96,21.46,178,2.38,1,DO=2.38<4.0
+8,Kamruzzaman_2026_Table2,7.63,22.86,184,2.17,1,DO=2.17<4.0
+9,Kamruzzaman_2026_Table2,7.58,22.16,180,2.21,1,DO=2.21<4.0
+10,Kamruzzaman_2026_Table2,7.79,24.05,185,2.84,1,DO=2.84<4.0
+11,Kamruzzaman_2026_Table2,8.0,23.31,184,1.12,1,DO=1.12<4.0
+12,Kamruzzaman_2026_Table2,7.94,23.41,190,1.9,1,DO=1.9<4.0
+13,Kamruzzaman_2026_Table2,7.95,22.88,182,2.08,1,DO=2.08<4.0
+14,Kamruzzaman_2026_Table2,7.93,24.26,184,2.24,1,DO=2.24<4.0
+15,Kamruzzaman_2026_Table2,7.9,25.32,183,1.56,1,DO=1.56<4.0
+16,Kamruzzaman_2026_Table2,7.99,25.52,181,2.3,1,DO=2.3<4.0
+17,Kamruzzaman_2026_Table2,8.51,24.6,177,2.45,1,DO=2.45<4.0; pH=8.51>8.5
+18,Kamruzzaman_2026_Table2,8.15,24.04,109,1.88,1,DO=1.88<4.0
+19,Kamruzzaman_2026_Table2,8.06,24.56,123,1.96,1,DO=1.96<4.0
+20,Kamruzzaman_2026_Table2,7.96,24.54,126,2.79,1,DO=2.79<4.0
+21,Kamruzzaman_2026_Table2,8.01,24.55,126,2.85,1,DO=2.85<4.0
+22,Kamruzzaman_2026_Table2,8.05,24.63,127,2.81,1,DO=2.81<4.0
+23,Kamruzzaman_2026_Table2,8.07,24.78,128,2.85,1,DO=2.85<4.0
+24,Kamruzzaman_2026_Table2,8.09,24.99,128,2.82,1,DO=2.82<4.0
+25,Kamruzzaman_2026_Table2,8.08,25.78,130,2.8,1,DO=2.8<4.0
+26,ECR_2023_Normal_Reference,7.02,22.1,122,7.4,0,All within ECR 2023 thresholds
+27,ECR_2023_Normal_Reference,7.15,22.8,130,7.1,0,All within ECR 2023 thresholds
+28,ECR_2023_Normal_Reference,7.28,23.2,138,6.9,0,All within ECR 2023 thresholds
+29,ECR_2023_Normal_Reference,7.35,23.6,143,6.7,0,All within ECR 2023 thresholds
+30,ECR_2023_Normal_Reference,7.44,24.0,148,6.5,0,All within ECR 2023 thresholds
+31,ECR_2023_Normal_Reference,7.52,24.3,153,6.3,0,All within ECR 2023 thresholds
+32,ECR_2023_Normal_Reference,7.6,24.6,158,6.1,0,All within ECR 2023 thresholds
+33,ECR_2023_Normal_Reference,7.68,24.9,162,5.9,0,All within ECR 2023 thresholds
+34,ECR_2023_Normal_Reference,7.72,25.2,165,5.7,0,All within ECR 2023 thresholds
+35,ECR_2023_Normal_Reference,7.78,25.5,168,5.5,0,All within ECR 2023 thresholds
+36,ECR_2023_Normal_Reference,7.83,25.8,171,5.3,0,All within ECR 2023 thresholds
+37,ECR_2023_Normal_Reference,7.88,26.1,174,5.2,0,All within ECR 2023 thresholds
+38,ECR_2023_Normal_Reference,7.92,26.5,177,5.1,0,All within ECR 2023 thresholds
+39,ECR_2023_Normal_Reference,7.96,27.0,179,5.05,0,All within ECR 2023 thresholds
+40,ECR_2023_Normal_Reference,8.0,27.5,180,5.0,0,All within ECR 2023 thresholds
