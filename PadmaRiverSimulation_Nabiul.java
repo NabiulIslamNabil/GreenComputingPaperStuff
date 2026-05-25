@@ -64,13 +64,18 @@ package org.fog.test.padma;
 //                                    paper.  Previous Javadoc falsely cited
 //                                    "paper Section III-D".  Citation removed;
 //                                    constants labelled as engineering values.
-//  FIX-16 ΔT window comment         Table IV says "(15 min)" for the
-//                                    temperature rate-of-change check.  With
-//                                    10-min sampling the code checks consecutive
-//                                    samples (10-min window), the closest
-//                                    feasible interval ≤ 15 min.  Comments
-//                                    corrected to state this explicitly instead
-//                                    of the misleading "~10-min window" tilde.
+//  FIX-16 ΔT window 10-min→20-min   Table IV specifies a 15-min window for
+//                                    the temperature rate-of-change check.  With
+//                                    10-min sampling the two feasible choices are
+//                                    10 min (1 sample back — over-sensitive, flags
+//                                    events the paper would not) and 20 min (2
+//                                    samples back — closest interval ≥ 15 min,
+//                                    does not exceed paper sensitivity).  Changed
+//                                    from 1-sample (10 min) to 2-sample (20 min)
+//                                    lookback.  prevPrevTempPerNode[] added to
+//                                    both runRCAS() and runThreshold() to store
+//                                    the t-2 reading; the first two samples per
+//                                    node correctly produce no spike (NaN guard).
 //  FIX-17 Summary-packet citation    16-byte daily summary packets were cited
 //                                    as "(paper Section I)" — Section I does
 //                                    not contain this value.  Comment updated
@@ -192,6 +197,49 @@ package org.fog.test.padma;
 //                                    simulation uses nodeBattery[] in runRCAS().
 //                                    Comment added explaining the field is
 //                                    retained for dataset completeness only.
+//
+//  DEEP AUDIT FIXES (paper-alignment completeness pass)
+//  -----------------------------------------------------
+//  FIX-33 ΔT window 10-min→20-min   The previous 1-sample (10-min) lookback
+//                                    made the ΔT detector MORE sensitive than
+//                                    the paper's Table IV "15-min window" spec,
+//                                    inflating TP+FP for both RCAS and Threshold.
+//                                    Changed to 2-sample (20-min) lookback —
+//                                    the closest feasible interval ≥ 15 min —
+//                                    so the simulation does not flag temperature
+//                                    events the paper would not classify as
+//                                    anomalies.  prevPrevTempPerNode[] tracks
+//                                    the t-2 reading in both runRCAS() and
+//                                    runThreshold().  The same lookback depth is
+//                                    used in both schedulers for a fair comparison.
+//  FIX-34 Always-Cloud/Local         Accuracy was hardcoded (99.0 / 94.0) as
+//         accuracy data-derived      stated assumptions about backend classifier
+//                                    quality — not computed from simulation data.
+//                                    RCAS accuracy IS computed from data via the
+//                                    paper's Table V formula (TP+TN)/Total×100,
+//                                    making the comparison apples-to-oranges.
+//                                    Both baselines now loop over data, count TP
+//                                    (= actual anomalies, since every sample is
+//                                    predicted anomaly and FN=0), and compute
+//                                    Accuracy = TP / Total × 100 — the honest
+//                                    formula result under TN=0.  This yields ≈8%
+//                                    (the actual anomaly injection rate), which is
+//                                    the correct scheduling-decision accuracy for
+//                                    a system that flags every sample as anomalous.
+//  FIX-35 Always-Cloud/Local         Precision/Recall/F1 were computed by an
+//         P/R/F1 sample-level        analytical structural-collapse argument in
+//                                    main() and reported alongside RCAS and
+//                                    Threshold values that were computed by
+//                                    sample-level TP/FP/FN counters — a
+//                                    methodological inconsistency in the Table V
+//                                    output.  Both baselines now track cntTP and
+//                                    cntFP inside their data loops (cntFN = 0
+//                                    always, since every sample is predicted
+//                                    anomaly) and return double[9] matching the
+//                                    runRCAS() / runThreshold() layout.  The
+//                                    analytical derivation block in main() is
+//                                    removed; all four schedulers report P/R/F1
+//                                    from identical sample-level counter logic.
 // ============================================================
 
 import java.util.*;
@@ -865,21 +913,31 @@ public class PadmaRiverSimulation {
         int[] prevDayPerNode = new int[NUM_NODES];
         Arrays.fill(prevDayPerNode, -1);
 
-        // FIX-16: Per-node previous temperature for the |ΔT| rate-of-change check.
+        // FIX-33: Per-node temperature history for the |ΔT| rate-of-change check.
         //
         // Paper Table IV specifies: Temperature anomaly = |ΔT| ≥ 3°C over a 15-min window.
         // The sampling interval is 10 minutes (SAMPLES_PER_DAY=144, 24h/144=10 min), so a
-        // 15-minute window cannot be reproduced exactly.  The choices are:
-        //   10 min (consecutive samples)  — 1 interval, below the 15-min spec
-        //   20 min (2 intervals back)     — above the 15-min spec; could miss
-        //                                   spikes that recover within 20 min
-        // This code uses consecutive samples (10-min window) as the closest feasible
-        // interval ≤ 15 min, which is slightly MORE sensitive than the paper requires
-        // (catches spikes at 10 min that the paper would only catch at 15 min).
-        // This is conservative from a water-quality safety perspective.
-        // The same approximation is applied in runThreshold() for a fair comparison.
-        double[] prevTempPerNode = new double[NUM_NODES];
-        Arrays.fill(prevTempPerNode, Double.NaN);
+        // 15-minute window cannot be reproduced exactly.  The two feasible choices are:
+        //   10 min (1 sample back)  — below the 15-min spec; MORE sensitive than the paper.
+        //                             Flags temperature events the paper would NOT flag.
+        //   20 min (2 samples back) — closest feasible interval ≥ 15 min; does NOT exceed
+        //                             the paper's sensitivity.  A spike must persist for at
+        //                             least 20 min to be detected, which is slightly LESS
+        //                             sensitive than the paper (misses spikes that recover
+        //                             between 15–20 min), but is the correct paper-aligned
+        //                             choice: it cannot inflate TP/FP beyond paper intent.
+        //
+        // This code uses a 2-sample (20-min) lookback (FIX-33).
+        // prevTempPerNode  holds the reading from t-1 (10 min ago).
+        // prevPrevTempPerNode holds the reading from t-2 (20 min ago).
+        // tempSpike compares r.temp against the t-2 reading.
+        // The first two samples per node produce NaN in prevPrevTempPerNode and are
+        // correctly skipped by the Double.isNaN guard — no spurious spike at startup.
+        // The same 2-sample lookback is used in runThreshold() for a fair comparison.
+        double[] prevTempPerNode     = new double[NUM_NODES];
+        double[] prevPrevTempPerNode = new double[NUM_NODES];
+        Arrays.fill(prevTempPerNode,     Double.NaN);
+        Arrays.fill(prevPrevTempPerNode, Double.NaN);
 
         // Per-node battery state (starts at 100%, drains by action)
         double[] nodeBattery = new double[NUM_NODES];
@@ -981,10 +1039,16 @@ public class PadmaRiverSimulation {
             // computation"). Running Stages 2-4 before this check violates
             // Algorithm 2's control flow and its "near-zero cost" guarantee.
             //
-            // FIX-9: temperature rate-of-change check (Table IV: |ΔT| ≥ 3°C)
-            boolean tempSpike = !Double.isNaN(prevTempPerNode[n])
-                                && Math.abs(r.temp - prevTempPerNode[n]) >= 3.0;
-            prevTempPerNode[n] = r.temp;
+            // FIX-33: temperature rate-of-change check (Table IV: |ΔT| ≥ 3°C, 15-min window).
+            // Compares r.temp against prevPrevTempPerNode[n] (t-2, 20-min ago) — the closest
+            // feasible lookback ≥ 15 min.  The shift below maintains the sliding window:
+            //   prevPrevTemp ← prevTemp  (t-2 slot receives what was t-1)
+            //   prevTemp     ← r.temp   (t-1 slot receives current reading)
+            // On the first two samples prevPrevTempPerNode[n] is NaN → no spike (correct).
+            boolean tempSpike = !Double.isNaN(prevPrevTempPerNode[n])
+                                && Math.abs(r.temp - prevPrevTempPerNode[n]) >= 3.0;
+            prevPrevTempPerNode[n] = prevTempPerNode[n];
+            prevTempPerNode[n]     = r.temp;
 
             // Table IV thresholds: pH <6.0/>8.5, TDS >1000, DO <4.0, |ΔT|≥3°C
             boolean immediateAlert = r.pH  < 6.0  || r.pH > 8.5
@@ -1201,7 +1265,7 @@ public class PadmaRiverSimulation {
     // Paper references:
     //   Section II, Contribution 3 : "32 bytes per packet"
     //   Table IV                   : Threshold rules — pH <6.0/>8.5, TDS >1000,
-    //                                DO <4.0, |ΔT| ≥ 3°C (15-min / 10-min window)
+    //                                DO <4.0, |ΔT| ≥ 3°C (15-min / 20-min window)
     //   Table V                    : Metric definitions — Energy(mWh/day),
     //                                Carbon(gCO₂/day), Network(Bytes/day),
     //                                Latency(ms), Accuracy(%), Battery(days)
@@ -1210,31 +1274,37 @@ public class PadmaRiverSimulation {
     //   Algorithm 3                : Outputs: {Local Inference, Send to Cloud,
     //                                Delay+Buffer}
     //
-    // ─── ACCURACY DESIGN NOTES ────────────────────────────────────────────────
+    // ─── ACCURACY AND CLASSIFICATION METRICS (FIX-34 / FIX-35) ──────────────
     //
-    //   RCAS (runRCAS) computes accuracy dynamically:
+    //   All four schedulers now compute Accuracy, Precision, Recall, and F1
+    //   from sample-level TP/FP/FN counters using identical methodology.
+    //   All four return double[9]: [0..5] as before, [6] precision, [7] recall,
+    //   [8] f1.
+    //
+    //   RCAS (runRCAS):
     //     predictedAnomaly = (decision == LOCAL || decision == CLOUD)
-    //     BUFFER           = predicted non-anomaly
-    //     Accuracy = (TP + TN) / Total × 100   [Table V]
+    //     BUFFER           = predicted non-anomaly (FIX-24)
+    //     TN, FN are both possible → Accuracy, Precision, Recall, F1 are all
+    //     meaningfully different from each other.
     //
-    //   Always Cloud: every sample → CLOUD → predictedAnomaly = true for ALL
-    //     samples → TN = 0 → (TP+TN)/Total collapses to TP/Total ≈ 8%.
-    //     The hardcoded 99.0 is therefore NOT produced by the Table V formula.
-    //     It is the ASSUMED cloud-backend detection quality (receives everything,
-    //     classifies near-perfectly). This is a stated simulation parameter, not
-    //     a computed metric. Kept as-is; documented here explicitly.
+    //   Always Cloud / Always Local (FIX-34 / FIX-35):
+    //     Every sample → CLOUD (or LOCAL) → predictedAnomaly = true for ALL.
+    //     TN = 0  (no sample predicted non-anomaly)
+    //     FN = 0  (every anomaly is caught by definition)
+    //     TP = total actual anomalies in dataset
+    //     FP = total actual non-anomalies in dataset
+    //     Accuracy  = TP / Total × 100 ≈ anomaly_rate × 100 ≈ 8%
+    //     Precision = TP / (TP + FP)  = anomaly_rate ≈ 0.08
+    //     Recall    = TP / (TP + 0)   = 1.0
+    //     F1        = 2 × Precision / (Precision + 1.0)
+    //     Previously hardcoded as 99.0 / 94.0 (stated backend-classifier
+    //     assumptions, not scheduling-decision accuracy).  Those values measured
+    //     a different concept than the paper's Table V formula.  Now computed
+    //     from data, matching all other schedulers.
     //
-    //   Always Local: same structural collapse — every sample → LOCAL →
-    //     TN = 0. 94.0 is the ASSUMED TinyML local detection rate (lower than
-    //     cloud due to model constraints). Stated parameter. Kept as-is.
-    //
-    //   Threshold: unlike Cloud/Local, it has a BINARY predicted output —
-    //     high = true  → predictedAnomaly (fires cloud alert)
-    //     high = false → predicted non-anomaly (no action)
-    //     → (TP+TN)/Total IS computable from data, exactly as RCAS does.
-    //     FIX-T1: was hardcoded 96.0; running seed 42 yields 98.04%. The
-    //     hardcoded value was 2.04% off and inconsistent with the paper formula
-    //     used by RCAS. Now computed dynamically to match paper Table V.
+    //   Threshold (runThreshold):
+    //     Binary output — high = predictedAnomaly, silent = predicted non-anomaly.
+    //     All four confusion-matrix cells are computable from data (FIX-T1/T2).
     //
     // ─── OTHER AUDIT RESULTS (no code change needed) ─────────────────────────
     //
@@ -1262,6 +1332,33 @@ public class PadmaRiverSimulation {
 
         double energy = 0, carbon = 0, network = 0, latency = 0;
 
+        // FIX-34/35: Accuracy and P/R/F1 are now computed from sample-level counters,
+        // matching the methodology used in runRCAS() and runThreshold().
+        //
+        // Always-Cloud sends every sample to the cloud → predictedAnomaly = true for
+        // every record.  Under this policy:
+        //   TN = 0  (no sample is ever predicted non-anomaly)
+        //   FN = 0  (every actual anomaly IS predicted anomaly → never missed)
+        //   TP = number of actual anomalies in the dataset
+        //   FP = number of actual non-anomalies in the dataset
+        //
+        // Accuracy  = (TP + TN) / Total × 100  [Table V]
+        //           = TP / Total × 100          (since TN = 0)
+        //           ≈ actual anomaly injection rate × 100  (≈ 8%)
+        //
+        // This is the honest formula result for a scheduler that predicts every sample
+        // as anomalous.  It measures scheduling-decision accuracy, not backend-classifier
+        // quality.  The previous hardcoded 99.0 measured assumed backend quality — a
+        // different concept that the paper's Table V formula does not define.
+        //
+        // Precision = TP / (TP + FP) = TP / Total  = anomaly rate (same as Accuracy/100)
+        // Recall    = TP / (TP + FN) = TP / TP     = 1.0  (FN = 0 always)
+        // F1        = 2 × Precision × Recall / (Precision + Recall)
+        int cntTP = 0;
+        int cntFP = 0;
+        // cntFN = 0 always (every sample predicted anomaly → no actual anomaly is missed)
+        // cntTN = 0 always (every sample predicted anomaly → no true negative possible)
+
         for (SensorRecord r : data) {
             // P = 0.9: SIMULATION ENGINEERING CONSTANT — not in the paper.
             // Represents the high-urgency posture of always-cloud (all data treated
@@ -1276,29 +1373,69 @@ public class PadmaRiverSimulation {
             // the comparison correctly shows RCAS has lower latency than always-cloud.
             // Paper provides no numeric baseline latency constant.
             latency += 185;
+
+            // FIX-34/35: sample-level classification counters.
+            // predictedAnomaly = true for every sample (always-cloud policy).
+            if (r.isAnomaly) cntTP++;   // true positive
+            else             cntFP++;   // false positive
         }
 
-        double nodeDays = (double) NUM_NODES * SIM_DAYS;
+        double nodeDays    = (double) NUM_NODES * SIM_DAYS;
+        double totalSamples = data.size();
+
+        // FIX-34: Accuracy = TP / Total × 100  (TN = 0 by construction)
+        double accuracy  = (100.0 * cntTP) / Math.max(totalSamples, 1);
+
+        // FIX-35: Precision, Recall, F1 from sample-level counters.
+        // cntFN = 0 always, so denominator guards are straightforward.
+        double precision = (cntTP + cntFP > 0)
+                           ? (double) cntTP / (cntTP + cntFP) : 0.0;
+        double recall    = 1.0;   // TP / (TP + FN) = TP / TP, FN = 0 always
+        double f1        = (precision + recall > 0.0)
+                           ? 2.0 * precision * recall / (precision + recall) : 0.0;
+
         return new double[] {
             energy  / nodeDays,
             carbon  / nodeDays,
             network / nodeDays,
             latency / data.size(),
-            // 99.0: STATED ASSUMPTION — cloud backend achieves near-perfect detection
-            // because it receives 100% of raw data. Cannot be computed via (TP+TN)/Total
-            // because this baseline has no non-anomaly prediction path (TN = 0 always).
-            // See accuracy design notes above.
-            99.0,
+            accuracy,   // FIX-34: data-derived, not hardcoded 99.0
             // Math.max guard matches runRCAS() defensive pattern: prevents division
             // by zero if energyDay is ever 0.0 (impossible in practice for this
             // baseline, but required for consistency across all scheduler methods).
-            Math.min(365, BATTERY_MWH / Math.max(energy / nodeDays, 0.001))
+            Math.min(365, BATTERY_MWH / Math.max(energy / nodeDays, 0.001)),
+            precision,  // FIX-35: sample-level TP/(TP+FP)
+            recall,     // FIX-35: 1.0 — FN=0 by construction
+            f1          // FIX-35: harmonic mean
         };
     }
 
     static double[] runAlwaysLocal(List<SensorRecord> data) {
 
         double energy = 0, carbon = 0, latency = 0;
+
+        // FIX-34/35: Accuracy and P/R/F1 are now computed from sample-level counters,
+        // matching the methodology used in runRCAS() and runThreshold().
+        //
+        // Always-Local runs inference on every sample locally → predictedAnomaly = true
+        // for every record (the local TinyML model classifies every reading, and in the
+        // scheduling model LOCAL == predicted anomaly, same as CLOUD).  Under this policy:
+        //   TN = 0  (no sample is ever predicted non-anomaly)
+        //   FN = 0  (every actual anomaly IS predicted anomaly → never missed)
+        //   TP = number of actual anomalies in the dataset
+        //   FP = number of actual non-anomalies in the dataset
+        //
+        // The structural analysis is identical to Always-Cloud.  The difference between
+        // the two baselines is energy, carbon, latency, and network — not classification
+        // quality.  Both correctly yield Accuracy ≈ anomaly_rate × 100 ≈ 8%.
+        //
+        // The previous hardcoded 94.0 represented an assumed TinyML misclassification
+        // rate — again a backend-classifier concept, not the scheduling-decision accuracy
+        // that the paper's Table V formula (TP+TN)/Total×100 measures.
+        int cntTP = 0;
+        int cntFP = 0;
+        // cntFN = 0 always (every sample predicted anomaly → no actual anomaly is missed)
+        // cntTN = 0 always (every sample predicted anomaly → no true negative possible)
 
         for (SensorRecord r : data) {
             // P = 0.8: SIMULATION ENGINEERING CONSTANT — not in the paper.
@@ -1313,9 +1450,26 @@ public class PadmaRiverSimulation {
             // to reflect constant polling cost without the RCAS adaptive path.
             // Paper provides no numeric baseline latency constant.
             latency += 12;
+
+            // FIX-34/35: sample-level classification counters.
+            // predictedAnomaly = true for every sample (always-local policy).
+            if (r.isAnomaly) cntTP++;   // true positive
+            else             cntFP++;   // false positive
         }
 
-        double nodeDays = (double) NUM_NODES * SIM_DAYS;
+        double nodeDays    = (double) NUM_NODES * SIM_DAYS;
+        double totalSamples = data.size();
+
+        // FIX-34: Accuracy = TP / Total × 100  (TN = 0 by construction)
+        double accuracy  = (100.0 * cntTP) / Math.max(totalSamples, 1);
+
+        // FIX-35: Precision, Recall, F1 from sample-level counters.
+        double precision = (cntTP + cntFP > 0)
+                           ? (double) cntTP / (cntTP + cntFP) : 0.0;
+        double recall    = 1.0;   // TP / (TP + FN) = TP / TP, FN = 0 always
+        double f1        = (precision + recall > 0.0)
+                           ? 2.0 * precision * recall / (precision + recall) : 0.0;
+
         return new double[] {
             energy  / nodeDays,
             carbon  / nodeDays,
@@ -1323,15 +1477,14 @@ public class PadmaRiverSimulation {
             // Always Local never transmits to cloud; all processing stays on-device.
             0,
             latency / data.size(),
-            // 94.0: STATED ASSUMPTION — TinyML local detection rate, lower than cloud
-            // (94% vs 99%) due to model constraints and absence of nightly calibration.
-            // Cannot be computed via (TP+TN)/Total: no non-anomaly path → TN = 0.
-            // See accuracy design notes above.
-            94.0,
+            accuracy,   // FIX-34: data-derived, not hardcoded 94.0
             // Math.max guard matches runRCAS() defensive pattern: prevents division
             // by zero if energyDay is ever 0.0 (impossible in practice for this
             // baseline, but required for consistency across all scheduler methods).
-            Math.min(365, BATTERY_MWH / Math.max(energy / nodeDays, 0.001))
+            Math.min(365, BATTERY_MWH / Math.max(energy / nodeDays, 0.001)),
+            precision,  // FIX-35: sample-level TP/(TP+FP)
+            recall,     // FIX-35: 1.0 — FN=0 by construction
+            f1          // FIX-35: harmonic mean
         };
     }
 
@@ -1355,20 +1508,26 @@ public class PadmaRiverSimulation {
         int cntTP = 0, cntFP = 0, cntFN = 0;
         int totalSamples = 0;
 
-        // FIX-16: Per-node previous temperature for the |ΔT| check.
-        // Paper Table IV: |ΔT| ≥ 3°C (15 min).  With 10-min sampling, consecutive
-        // samples give a 10-min window — the closest feasible interval ≤ 15 min.
+        // FIX-33: Per-node temperature history for the |ΔT| check.
+        // Paper Table IV: |ΔT| ≥ 3°C (15 min).  With 10-min sampling, a 2-sample
+        // (20-min) lookback is used — the closest feasible interval ≥ 15 min.
         // Matches the approximation used in runRCAS() for a fair comparison.
-        double[] prevTemp = new double[NUM_NODES];
-        Arrays.fill(prevTemp, Double.NaN);
+        // prevPrevTemp holds the t-2 reading (20 min ago); prevTemp holds t-1 (10 min ago).
+        double[] prevTemp     = new double[NUM_NODES];
+        double[] prevPrevTemp = new double[NUM_NODES];
+        Arrays.fill(prevTemp,     Double.NaN);
+        Arrays.fill(prevPrevTemp, Double.NaN);
 
         for (SensorRecord r : data) {
 
             // Table IV thresholds — identical to RCAS pre-filter (fair comparison):
             // pH <6.0 or >8.5, TDS >1000 mg/L, DO <4.0 mg/L, |ΔT| ≥ 3°C
-            boolean tempSpike = !Double.isNaN(prevTemp[r.node])
-                            && Math.abs(r.temp - prevTemp[r.node]) >= 3.0;
-            prevTemp[r.node] = r.temp;
+            // FIX-33: compare against t-2 reading (20-min lookback) to match
+            // runRCAS().  Shift: prevPrevTemp ← prevTemp ← r.temp.
+            boolean tempSpike = !Double.isNaN(prevPrevTemp[r.node])
+                            && Math.abs(r.temp - prevPrevTemp[r.node]) >= 3.0;
+            prevPrevTemp[r.node] = prevTemp[r.node];
+            prevTemp[r.node]     = r.temp;
 
             boolean high = r.pH  < 6.0  || r.pH > 8.5
                         || r.tds > 1000.0
@@ -1452,21 +1611,29 @@ public class PadmaRiverSimulation {
     //            Precision = TP / (TP + FP)
     //            Recall    = TP / (TP + FN)
     //            F1        = 2 × Precision × Recall / (Precision + Recall)
-    //          runRCAS() returns double[9]:
+    //          All four schedulers return double[9]:
     //            [0] energyDay   [1] carbonDay  [2] networkDay
     //            [3] latencyAvg  [4] accuracy   [5] batteryDays
     //            [6] precision   [7] recall     [8] f1
-    //          runThreshold() also returns double[9] (FIX-T2): its binary
-    //          high/not-high prediction makes TP/TN/FP/FN all computable.
-    //          Always Cloud and Always Local return double[6]: their TN=0
-    //          structurally (every sample predicted anomaly); P/R/F1 are
-    //          derived from fixed-P stated assumptions only.
     //
     //  FIX-T2  runThreshold() Precision/Recall/F1 now sample-level computed.
     //          Unlike Always Cloud/Local (every sample → predictedAnomaly=true),
     //          Threshold has a true binary output so all four confusion-matrix
     //          cells are well-defined.  Counters cntTP, cntFP, cntFN added;
     //          return expanded from double[6] to double[9].
+    //
+    //  FIX-34  Always-Cloud/Local accuracy is now data-derived, not hardcoded.
+    //          The paper's Table V formula (TP+TN)/Total×100 is applied to
+    //          both baselines.  Since TN=0 structurally (every sample predicted
+    //          anomaly), the result is TP/Total ≈ anomaly_rate × 100 ≈ 8%.
+    //          The previous 99.0 / 94.0 values measured assumed backend-classifier
+    //          quality — a different concept from scheduling-decision accuracy.
+    //
+    //  FIX-35  Always-Cloud/Local Precision/Recall/F1 now use sample-level
+    //          counters inside their data loops, matching runRCAS() and
+    //          runThreshold() methodology exactly.  The analytical structural-
+    //          collapse derivation block that was in main() is removed; all four
+    //          schedulers now produce P/R/F1 from the same type of computation.
     //
     //  FIX-M2  Metric labels corrected from "/nd" → "/node-day" to match
     //          Table V unit definitions ("per node over 24 hours").
@@ -1490,8 +1657,8 @@ public class PadmaRiverSimulation {
         System.out.println("Generated " + data.size() + " records.");
 
         double[] rcas      = runRCAS(data);        // double[9]: indices 0-8
-        double[] cloud     = runAlwaysCloud(data); // double[6]: indices 0-5
-        double[] local     = runAlwaysLocal(data); // double[6]: indices 0-5
+        double[] cloud     = runAlwaysCloud(data); // double[9]: indices 0-8 (FIX-34/35)
+        double[] local     = runAlwaysLocal(data); // double[9]: indices 0-8 (FIX-34/35)
         double[] threshold = runThreshold(data);   // double[9]: indices 0-8 (FIX-T2)
 
         System.out.println();
@@ -1511,54 +1678,31 @@ public class PadmaRiverSimulation {
         System.out.printf("%-24s %-12.2f %-12.2f %-12.2f %-12.2f\n",
                 "BattLife (days)",        rcas[5], cloud[5], local[5], threshold[5]);
 
-        // FIX-M1 / FIX-T2: Classification metrics for all schedulers (Section IV).
-        // RCAS and Simple Threshold use sample-level TP/FP/FN counters.
-        // Always Cloud/Local are derived analytically (see comment block below).
+        // FIX-M1 / FIX-T2 / FIX-34 / FIX-35:
+        // All four schedulers now return double[9] with indices [6][7][8] =
+        // precision, recall, f1 — computed by sample-level TP/FP/FN counters
+        // in every case.  The analytical structural-collapse derivation that
+        // was previously computed here for Always-Cloud and Always-Local is
+        // removed: those values are now produced inside their own run methods,
+        // matching the methodology of runRCAS() and runThreshold() exactly.
         System.out.println();
         System.out.println("=========== RCAS CLASSIFICATION METRICS (Section IV) ===========");
         System.out.printf("Precision : %.4f\n", rcas[6]);
         System.out.printf("Recall    : %.4f\n", rcas[7]);
         System.out.printf("F1-Score  : %.4f\n", rcas[8]);
 
-        // Paper Section IV: "Precision, Recall and F1-score are also evaluated
-        // as it is done in the work [1], [2]."
-        // RCAS: fully sample-level computed (cntTP/cntFP/cntFN in runRCAS).
-        // Simple Threshold: fully sample-level computed (FIX-T2 in runThreshold).
-        // Always Cloud / Always Local: TN=0 structurally (every sample predicted
-        // anomaly → no true negative possible).  Their Precision/Recall/F1 are
-        // derived from first principles given the structural constraint:
-        //   Precision = TP / (TP+FP) = TP / Total ≈ actual anomaly rate
-        //   Recall    = TP / (TP+FN) = TP / TP   = 1.0  (FN is always zero)
-        //   F1        = 2×P×R / (P+R)
-        // The actual anomaly rate is computed from the data itself (not assumed).
-        long totalRecords = data.size();
-        long totalAnomalies = data.stream().filter(r -> r.isAnomaly).count();
-        double actualAnomalyRate = (double) totalAnomalies / Math.max(totalRecords, 1);
-
-        double cloudPrecision = actualAnomalyRate;   // TP/Total, since FP=(1-rate)*Total
-        double cloudRecall    = 1.0;                 // Recall=1: catches every anomaly
-        double cloudF1        = (cloudPrecision + cloudRecall > 0)
-                                ? 2.0 * cloudPrecision * cloudRecall
-                                  / (cloudPrecision + cloudRecall) : 0.0;
-
-        double localPrecision = actualAnomalyRate;   // same structural collapse as Cloud
-        double localRecall    = 1.0;
-        double localF1        = (localPrecision + localRecall > 0)
-                                ? 2.0 * localPrecision * localRecall
-                                  / (localPrecision + localRecall) : 0.0;
-
         System.out.println();
         System.out.println("=========== ALL-SCHEDULER CLASSIFICATION METRICS (Section IV) ===========");
         System.out.printf("%-20s  Precision: %-8.4f  Recall: %-8.4f  F1: %.4f\n",
-                "RCAS",            rcas[6],       rcas[7],      rcas[8]);
+                "RCAS",             rcas[6],      rcas[7],      rcas[8]);
         System.out.printf("%-20s  Precision: %-8.4f  Recall: %-8.4f  F1: %.4f\n",
                 "Simple Threshold", threshold[6], threshold[7], threshold[8]);
         System.out.printf("%-20s  Precision: %-8.4f  Recall: %-8.4f  F1: %.4f\n",
-                "Always Cloud(*)", cloudPrecision, cloudRecall, cloudF1);
+                "Always Cloud",     cloud[6],     cloud[7],     cloud[8]);
         System.out.printf("%-20s  Precision: %-8.4f  Recall: %-8.4f  F1: %.4f\n",
-                "Always Local(*)", localPrecision, localRecall, localF1);
-        System.out.println("  (*) Always Cloud/Local: TN=0 by design (every sample predicted anomaly).");
-        System.out.println("      Precision derived from actual anomaly rate; Recall=1.0 by definition.");
+                "Always Local",     local[6],     local[7],     local[8]);
+        System.out.println("  Note: Always Cloud/Local predict every sample as anomalous (TN=FN=0).");
+        System.out.println("  All values computed from sample-level TP/FP/FN counters (FIX-35).");
 
         System.out.println();
         System.out.println("=========== RCAS VS ALWAYS CLOUD ===========");
