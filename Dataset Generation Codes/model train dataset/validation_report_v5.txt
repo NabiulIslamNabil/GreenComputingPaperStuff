@@ -1,0 +1,51 @@
+=================================================================
+VALIDATION REPORT  —  seed_dataset_final_v5.csv  →  17,280 rows
+=================================================================
+
+── VALIDATION A: KS Test — seed vs. final generated dataset ──
+  Method: Chia et al. 2023, Eq. 5 (with Fix 2)
+  Using random sample of final dataset to match evaluation size
+  Pass criterion: D < 0.20 (more reliable when n_seed << n_synthetic)
+
+  pH                D=0.2195  p=0.0003  →  FAIL ✗
+  !! CRITICAL: pH KS fail — generator may not have reproduced anomaly distribution
+  temperature_C     D=0.0984  p=0.3397  →  PASS ✓
+  TDS_mgl           D=0.3542  p=0.0000  →  FAIL ✗
+  !! CRITICAL: TDS_mgl KS fail — generator may not have reproduced anomaly distribution
+  DO_mgl            D=0.1675  p=0.0128  →  PASS ✓
+
+  Overall Validation A: FAIL ✗ — review KS failures above
+
+── VALIDATION B: Physical Bounds Check ──
+  Method: Leigh et al. 2019 physical plausibility
+
+  pH                range=[5.20, 9.00]  violations=0  →  PASS ✓
+  temperature_C     range=[20.51, 30.10]  violations=0  →  PASS ✓
+  TDS_mgl           range=[82.00, 1400.00]  violations=0  →  PASS ✓
+  DO_mgl            range=[1.12, 7.32]  violations=0  →  PASS ✓
+
+  Total violations  : 0
+  Overall Validation B: PASS ✓
+
+── VALIDATION C: Anomaly Subtype Presence Check ──
+  Method: Zhao et al. 2023 / Wang et al. 2024 AC-i taxonomy
+
+  AC1_DO_only                  5243 rows  (56.3%)  →  PASS ✓
+  AC1_pH_low_only              1237 rows  (13.3%)  →  PASS ✓
+  AC1_pH_high_only              666 rows  (7.2%)  →  PASS ✓
+  AC1_TDS_only                  395 rows  (4.2%)  →  PASS ✓
+  AC2_DO_pH                    1360 rows  (14.6%)  →  present ✓
+  AC3_DO_pH_TDS                  74 rows  (0.8%)  →  present ✓
+
+  Overall Validation C: PASS ✓
+
+=================================================================
+OVERALL VALIDATION: ONE OR MORE FAILURES — see above
+=================================================================
+
+  Winning model   : CTGAN
+  Generated rows  : 17,280
+  Anomaly (label=1): 9,309  (53.87%)
+  Validation A (KS)         : FAIL
+  Validation B (bounds)     : PASS
+  Validation C (subtypes)   : PASS

@@ -1,0 +1,107 @@
+seed_row_id,source,pH,temperature_C,TDS_mgl,DO_mgl,label,anomaly_type,label_reason
+1,Kamruzzaman_2026_Table2,8.62,20.8,176,1.52,1,AC1_DO,DO=1.52<4.0
+2,Kamruzzaman_2026_Table2,8.36,20.51,178,1.81,1,AC1_DO,DO=1.81<4.0
+3,Kamruzzaman_2026_Table2,8.35,20.95,184,1.42,1,AC1_DO,DO=1.42<4.0
+4,Kamruzzaman_2026_Table2,7.85,21.55,178,2.24,1,AC1_DO,DO=2.24<4.0
+5,Kamruzzaman_2026_Table2,7.78,21.53,178,2.21,1,AC1_DO,DO=2.21<4.0
+6,Kamruzzaman_2026_Table2,8.16,21,178,2.37,1,AC1_DO,DO=2.37<4.0
+7,Kamruzzaman_2026_Table2,7.96,21.46,178,2.38,1,AC1_DO,DO=2.38<4.0
+8,Kamruzzaman_2026_Table2,7.63,22.86,184,2.17,1,AC1_DO,DO=2.17<4.0
+9,Kamruzzaman_2026_Table2,7.58,22.16,180,2.21,1,AC1_DO,DO=2.21<4.0
+10,Kamruzzaman_2026_Table2,7.79,24.05,185,2.84,1,AC1_DO,DO=2.84<4.0
+11,Kamruzzaman_2026_Table2,8,23.31,184,1.12,1,AC1_DO,DO=1.12<4.0
+12,Kamruzzaman_2026_Table2,7.94,23.41,190,1.9,1,AC1_DO,DO=1.90<4.0
+13,Kamruzzaman_2026_Table2,7.95,22.88,182,2.08,1,AC1_DO,DO=2.08<4.0
+14,Kamruzzaman_2026_Table2,7.93,24.26,184,2.24,1,AC1_DO,DO=2.24<4.0
+15,Kamruzzaman_2026_Table2,7.9,25.32,183,1.56,1,AC1_DO,DO=1.56<4.0
+16,Kamruzzaman_2026_Table2,7.99,25.52,181,2.3,1,AC1_DO,DO=2.30<4.0
+17,Kamruzzaman_2026_Table2,8.51,24.6,177,2.45,1,AC2_DO_pH,DO=2.45<4.0 AND pH=8.51>8.5
+18,Kamruzzaman_2026_Table2,8.15,24.04,109,1.88,1,AC1_DO,DO=1.88<4.0
+19,Kamruzzaman_2026_Table2,8.06,24.56,123,1.96,1,AC1_DO,DO=1.96<4.0
+20,Kamruzzaman_2026_Table2,7.96,24.54,126,2.79,1,AC1_DO,DO=2.79<4.0
+21,Kamruzzaman_2026_Table2,8.01,24.55,126,2.85,1,AC1_DO,DO=2.85<4.0
+22,Kamruzzaman_2026_Table2,8.05,24.63,127,2.81,1,AC1_DO,DO=2.81<4.0
+23,Kamruzzaman_2026_Table2,8.07,24.78,128,2.85,1,AC1_DO,DO=2.85<4.0
+24,Kamruzzaman_2026_Table2,8.09,24.99,128,2.82,1,AC1_DO,DO=2.82<4.0
+25,Kamruzzaman_2026_Table2,8.62,25.78,130,2.8,1,AC2_DO_pH,DO=2.80<4.0 AND pH=8.62>8.5
+26,Injected_Leigh2019_ECR2023_LiEtAl2023,5.6,24,155,5.2,1,AC1_pH_low,pH=5.60<6.0; DO normal
+27,Injected_Leigh2019_ECR2023_LiEtAl2023,5.3,23.5,148,5.5,1,AC1_pH_low,pH=5.30<6.0; DO normal
+28,Injected_Leigh2019_ECR2023_LiEtAl2023,5.8,24.8,162,5.8,1,AC1_pH_low,pH=5.80<6.0; DO normal
+29,Injected_Leigh2019_ECR2023_LiEtAl2023,5.45,23.2,157,5.1,1,AC1_pH_low,pH=5.45<6.0; DO normal
+30,Injected_Leigh2019_ECR2023_LiEtAl2023,5.7,24.1,144,6.1,1,AC1_pH_low,pH=5.70<6.0; DO normal
+31,Injected_Leigh2019_ECR2023_LiEtAl2023,5.2,22.9,139,5.7,1,AC1_pH_low,pH=5.20<6.0; DO normal
+32,Injected_Leigh2019_ECR2023_LiEtAl2023,8.7,25,162,5.8,1,AC1_pH_high,pH=8.70>8.5; DO normal
+33,Injected_Leigh2019_ECR2023_LiEtAl2023,8.8,24.5,158,6.2,1,AC1_pH_high,pH=8.80>8.5; DO normal
+34,Injected_Leigh2019_ECR2023_LiEtAl2023,8.9,24.2,170,5.1,1,AC1_pH_high,pH=8.90>8.5; DO normal
+35,Injected_Leigh2019_ECR2023_LiEtAl2023,9,25.5,165,5.5,1,AC1_pH_high,pH=9.00>8.5; DO normal
+36,Injected_Leigh2019_ECR2023_LiEtAl2023,8.75,23.8,155,6.3,1,AC1_pH_high,pH=8.75>8.5; DO normal
+37,Injected_Leigh2019_ECR2023_LiEtAl2023,8.85,24.9,173,5.4,1,AC1_pH_high,pH=8.85>8.5; DO normal
+38,Injected_Leigh2019_ECR2023_LiEtAl2023,7.4,24,1150,5.3,1,AC1_TDS,TDS=1150>1000; pH and DO normal
+39,Injected_Leigh2019_ECR2023_LiEtAl2023,7.6,23.5,1350,5.6,1,AC1_TDS,TDS=1350>1000; pH and DO normal
+40,Injected_Leigh2019_ECR2023_LiEtAl2023,7.2,25,1100,4.8,1,AC1_TDS,TDS=1100>1000; pH and DO normal
+41,Injected_Leigh2019_ECR2023_LiEtAl2023,7.8,24.8,1400,5.1,1,AC1_TDS,TDS=1400>1000; pH and DO normal
+42,Injected_Leigh2019_ECR2023_LiEtAl2023,7.5,23.1,1250,5.4,1,AC1_TDS,TDS=1250>1000; pH and DO normal
+43,Injected_Leigh2019_ECR2023_LiEtAl2023,7.3,24.3,1300,4.9,1,AC1_TDS,TDS=1300>1000; pH and DO normal
+44,Injected_LiEtAl2023_WangEtAl2024,5.5,24,160,2.8,1,AC2_DO_pH,DO=2.80<4.0 AND pH=5.50<6.0
+45,Injected_LiEtAl2023_WangEtAl2024,8.9,23,145,3.1,1,AC2_DO_pH,DO=3.10<4.0 AND pH=8.90>8.5
+46,Injected_LiEtAl2023_WangEtAl2024,5.8,25,175,1.9,1,AC2_DO_pH,DO=1.90<4.0 AND pH=5.80<6.0
+47,Injected_LiEtAl2023_WangEtAl2024,8.8,24.5,155,2.5,1,AC2_DO_pH,DO=2.50<4.0 AND pH=8.80>8.5
+48,Injected_LiEtAl2023_WangEtAl2024,5.4,24,1300,1.5,1,AC3_DO_pH_TDS,DO=1.50<4.0 AND pH=5.40<6.0 AND TDS=1300>1000
+49,Injected_LiEtAl2023_WangEtAl2024,9,23.5,1350,2,1,AC3_DO_pH_TDS,DO=2.00<4.0 AND pH=9.00>8.5 AND TDS=1350>1000
+50,Injected_LiEtAl2023_WangEtAl2024,5.7,25,1200,1.2,1,AC3_DO_pH_TDS,DO=1.20<4.0 AND pH=5.70<6.0 AND TDS=1200>1000
+51,Injected_LiEtAl2023_WangEtAl2024,8.8,24.5,1100,2.8,1,AC3_DO_pH_TDS,DO=2.80<4.0 AND pH=8.80>8.5 AND TDS=1100>1000
+52,Borderline_Leigh2019_DecisionBoundary,5.95,24.2,158,5.4,1,AC1_pH_low_borderline,pH=5.95<6.0 (near-threshold); DO normal
+53,Borderline_Leigh2019_DecisionBoundary,5.98,23.8,142,6.1,1,AC1_pH_low_borderline,pH=5.98<6.0 (near-threshold); DO normal
+54,Borderline_Leigh2019_DecisionBoundary,8.52,25.1,165,5.8,1,AC1_pH_high_borderline,pH=8.52>8.5 (near-threshold); DO normal
+55,Borderline_Leigh2019_DecisionBoundary,8.54,24.6,171,5.2,1,AC1_pH_high_borderline,pH=8.54>8.5 (near-threshold); DO normal
+56,Borderline_Leigh2019_DecisionBoundary,7.55,24,1020,5.1,1,AC1_TDS_borderline,TDS=1020>1000 (near-threshold); pH and DO normal
+57,Borderline_Leigh2019_DecisionBoundary,7.42,23.5,1050,4.85,1,AC1_TDS_borderline,TDS=1050>1000 (near-threshold); pH and DO normal
+58,Borderline_Leigh2019_DecisionBoundary,7.68,24.8,168,4.02,0,near_normal_DO,DO=4.02 is ABOVE 4.0 threshold; pH=7.68 and TDS=168 normal — correctly classified normal but near boundary
+59,Borderline_Leigh2019_DecisionBoundary,7.81,25.2,175,4.08,0,near_normal_DO,DO=4.08 is ABOVE 4.0 threshold; pH=7.81 and TDS=175 normal — correctly classified normal but near boundary
+60,Ahmed_2021_MIJST_Table1_SW1,7.33,26.5,93,6.97,0,normal,All within ECR 2023 thresholds
+61,Ahmed_2021_MIJST_Table1_SW2,7.58,26.8,82,6.81,0,normal,All within ECR 2023 thresholds
+62,Ahmed_2021_MIJST_Table1_SW3,7.7,27.1,97,6.82,0,normal,All within ECR 2023 thresholds
+63,Ahmed_2021_MIJST_Table1_SW4,7.86,27.4,89,6.78,0,normal,All within ECR 2023 thresholds
+64,Ahmed_2021_MIJST_Table1_SW5,7.91,27.6,102,6.63,0,normal,All within ECR 2023 thresholds
+65,Ahmed_2021_MIJST_Table1_SW6,7.93,27.8,101,6.52,0,normal,All within ECR 2023 thresholds
+66,Borderline_NearNormal_ECR2023,6.05,24,155,5.3,0,near_normal_pH_low,pH=6.05 just above 6.0; all else normal
+67,Borderline_NearNormal_ECR2023,8.45,25,162,5.6,0,near_normal_pH_high,pH=8.45 just below 8.5; all else normal
+68,Borderline_NearNormal_ECR2023,7.5,24.2,970,5.2,0,near_normal_TDS,TDS=970 just below 1000; pH and DO normal
+69,Borderline_NearNormal_ECR2023,7.62,24.5,162,4.2,0,near_normal_DO,DO=4.20 above 4.0; pH and TDS normal
+70,Borderline_NearNormal_ECR2023,6.12,23.8,148,5.5,0,near_normal_pH_low,pH=6.12 above 6.0; all else normal
+71,ECR2023_NaturalScatter_IslamHaque,7.14,22.3,118,7.32,0,normal,All within ECR 2023 thresholds
+72,ECR2023_NaturalScatter_IslamHaque,7.28,23.8,135,6.94,0,normal,All within ECR 2023 thresholds
+73,ECR2023_NaturalScatter_IslamHaque,7.41,25.6,152,6.55,0,normal,All within ECR 2023 thresholds
+74,ECR2023_NaturalScatter_IslamHaque,7.56,27.2,168,6.11,0,normal,All within ECR 2023 thresholds
+75,ECR2023_NaturalScatter_IslamHaque,7.69,28.9,183,5.78,0,normal,All within ECR 2023 thresholds
+76,ECR2023_NaturalScatter_IslamHaque,7.83,30.1,198,5.42,0,normal,All within ECR 2023 thresholds
+77,ECR2023_NaturalScatter_IslamHaque,8.01,29.4,208,5.19,0,normal,All within ECR 2023 thresholds
+78,ECR2023_NaturalScatter_IslamHaque,8.14,28,196,5.33,0,normal,All within ECR 2023 thresholds
+79,ECR2023_NaturalScatter_IslamHaque,8.22,26.7,185,5.51,0,normal,All within ECR 2023 thresholds
+80,ECR2023_NaturalScatter_IslamHaque,7.97,25.3,172,5.74,0,normal,All within ECR 2023 thresholds
+81,ECR2023_NaturalScatter_IslamHaque,7.74,24.1,159,5.96,0,normal,All within ECR 2023 thresholds
+82,ECR2023_NaturalScatter_IslamHaque,7.62,23.5,144,6.28,0,normal,All within ECR 2023 thresholds
+83,ECR2023_NaturalScatter_IslamHaque,7.47,22.8,130,6.62,0,normal,All within ECR 2023 thresholds
+84,ECR2023_NaturalScatter_IslamHaque,7.35,23.1,121,6.88,0,normal,All within ECR 2023 thresholds
+85,ECR2023_NaturalScatter_IslamHaque,7.19,24.5,138,7.1,0,normal,All within ECR 2023 thresholds
+86,ECR2023_NaturalScatter_IslamHaque,7.53,26.3,163,6.18,0,normal,All within ECR 2023 thresholds
+87,ECR2023_NaturalScatter_IslamHaque,7.77,27.8,177,5.64,0,normal,All within ECR 2023 thresholds
+88,ECR2023_NaturalScatter_IslamHaque,8.08,29,205,5.25,0,normal,All within ECR 2023 thresholds
+89,ECR2023_NaturalScatter_IslamHaque,8.19,27.6,193,5.44,0,normal,All within ECR 2023 thresholds
+90,ECR2023_NaturalScatter_IslamHaque,7.91,26,180,5.68,0,normal,All within ECR 2023 thresholds
+91,ECR2023_NaturalScatter_IslamHaque,7.65,24.9,157,6.08,0,normal,All within ECR 2023 thresholds
+92,ECR2023_NaturalScatter_IslamHaque,7.38,23.7,127,6.75,0,normal,All within ECR 2023 thresholds
+93,ECR2023_NaturalScatter_IslamHaque,7.22,22.5,113,7.22,0,normal,All within ECR 2023 thresholds
+94,ECR2023_NaturalScatter_IslamHaque,7.5,25.1,148,6.35,0,normal,All within ECR 2023 thresholds
+95,ECR2023_NaturalScatter_IslamHaque,7.73,26.8,171,5.88,0,normal,All within ECR 2023 thresholds
+96,ECR2023_NaturalScatter_IslamHaque,7.88,28.3,186,5.55,0,normal,All within ECR 2023 thresholds
+97,ECR2023_NaturalScatter_IslamHaque,8.05,29.7,201,5.3,0,normal,All within ECR 2023 thresholds
+98,ECR2023_NaturalScatter_IslamHaque,7.44,24.3,142,6.48,0,normal,All within ECR 2023 thresholds
+99,ECR2023_NaturalScatter_IslamHaque,7.6,25.8,165,5.99,0,normal,All within ECR 2023 thresholds
+100,ECR2023_NaturalScatter_IslamHaque,7.82,27.1,179,5.71,0,normal,All within ECR 2023 thresholds
+101,Injected_LiEtAl2023_WangEtAl2024,5.5,23.5,1150,1.8,1,AC3_DO_pH_TDS,DO=1.80<4.0 AND pH=5.50<6.0 AND TDS=1150>1000
+102,Injected_LiEtAl2023_WangEtAl2024,5.65,24.2,1250,2.4,1,AC3_DO_pH_TDS,DO=2.40<4.0 AND pH=5.65<6.0 AND TDS=1250>1000
+103,Injected_LiEtAl2023_WangEtAl2024,5.8,23,1180,3.2,1,AC3_DO_pH_TDS,DO=3.20<4.0 AND pH=5.80<6.0 AND TDS=1180>1000
+104,Injected_LiEtAl2023_WangEtAl2024,8.75,24.8,1120,2.6,1,AC3_DO_pH_TDS,DO=2.60<4.0 AND pH=8.75>8.5 AND TDS=1120>1000
+105,Injected_LiEtAl2023_WangEtAl2024,8.95,23.8,1300,1.6,1,AC3_DO_pH_TDS,DO=1.60<4.0 AND pH=8.95>8.5 AND TDS=1300>1000
+106,Injected_LiEtAl2023_WangEtAl2024,8.85,25.1,1220,3.5,1,AC3_DO_pH_TDS,DO=3.50<4.0 AND pH=8.85>8.5 AND TDS=1220>1000
