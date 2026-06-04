@@ -243,6 +243,11 @@ package org.fog.test.padma;
 // ============================================================
 
 import java.util.*;
+import java.io.*;
+import java.util.zip.*;
+import javax.xml.parsers.*;
+import org.xml.sax.*;
+import org.xml.sax.helpers.DefaultHandler;
 // FIX-14: import org.fog.entities.* removed — FogDevice, Sensor, Actuator
 // were declared but never used.  The simulation runs entirely on SensorRecord
 // objects; no iFogSim infrastructure is instantiated.
@@ -744,93 +749,377 @@ public class PadmaRiverSimulation {
     }
 
     // ==========================================================
-    // SYNTHETIC DATA GENERATOR
+    // DATA LOADER  (replaces SYNTHETIC DATA GENERATOR)
     // ==========================================================
+    // Reads sensor records directly from the pre-built xlsx dataset
+    // (padma_synthetic_17280_v6_with_CI.xlsx, 17,280 rows).
+    //
+    // Column mapping (xlsx → SensorRecord):
+    //   node_id          → node  (NODE_01..NODE_08 → 0..7)
+    //   day_of_simulation→ day   (1..15)
+    //   time             → minute (HH:MM string → minutes from midnight)
+    //   pH               → pH
+    //   temperature_C    → temp
+    //   TDS_mgl          → tds
+    //   DO_mgl           → dO
+    //   label            → isAnomaly (0 = normal, 1 = anomaly)
+    //   CI_gCO2_per_kWh  → ci   (actual measured grid carbon intensity)
+    //
+    // CI is read directly from the xlsx column — no formula or simulation
+    // engineering constant is applied.  The CI values already reflect the
+    // Bangladesh diurnal grid pattern embedded in the dataset.
+    //
+    // SensorRecord.battery is set to 100.0 (initial full charge) for every
+    // row — the simulation's per-node battery state is tracked separately
+    // inside runRCAS() via nodeBattery[], which drains dynamically.
+    //
+    // The xlsx must be located at XLSX_PATH (configurable below).
+    // Row ordering is preserved as-is from the file — generateData()'s
+    // node→day→sample ordering guarantee (FIX-23) holds because the xlsx
+    // was built with that same ordering.
+    // ==========================================================
+
+        /** Path to the pre-built xlsx dataset. Adjust if the file is elsewhere. */
+        static final String XLSX_PATH =
+            "src/org/fog/test/padma/padma_synthetic_17280_v6_with_CI.xlsx";
 
     static List<SensorRecord> generateData() {
 
         List<SensorRecord> data = new ArrayList<>();
-        Random rng = new Random(42);
 
-        for (int node = 0; node < NUM_NODES; node++) {
-
-            double battery = 100.0;
-
-            for (int day = 1; day <= SIM_DAYS; day++) {
-
-                for (int s = 0; s < SAMPLES_PER_DAY; s++) {
-
-                    // FIX-1: 10-minute sampling interval
-                    int    minute = s * 10;
-                    double hour   = minute / 60.0;
-
-                    // Dynamic carbon intensity (Bangladesh national grid pattern)
-                    double ciPhase = 2 * Math.PI * (hour - 3.0) / 24.0;
-                    double ci = BD_CI_BASE + 70 * Math.sin(ciPhase);
-                    ci += (rng.nextDouble() - 0.5) * 20;
-                    ci  = Math.max(BD_CI_MIN, Math.min(BD_CI_MAX, ci));
-
-                    // ── NORMAL PARAMETER GENERATION ───────────────────────────
-                    // Calibrated to Bangladesh ECR 2023 normal ranges (Table II)
-
-                    // Temperature: 25–30°C with diurnal variation
-                    double tempPhase = 2 * Math.PI * (hour - 6.0) / 24.0;
-                    double temp = 27.5 + 2.0 * Math.sin(tempPhase)
-                                       + rng.nextGaussian() * 0.3;
-                    temp = Math.max(20, Math.min(32, temp));
-
-                    // pH: normally 7.0–8.0 (Table II normal range)
-                    double pH = 7.2 + rng.nextGaussian() * 0.15;
-                    pH = Math.max(6.6, Math.min(8.3, pH));
-
-                    // FIX-4: TDS (mg/L) — replaces turbidity.
-                    // Normal range: 120–180 mg/L (Table II).
-                    // Nodes 3–5 near industrial zone: slightly elevated baseline.
-                    double tdsBase = (node >= 3 && node <= 5) ? 155.0 : 140.0;
-                    if (day >= 8 && day <= 12)   // seasonal elevation
-                        tdsBase += 10.0;
-                    double tds = tdsBase + rng.nextGaussian() * 12.0;
-                    tds = Math.max(110, Math.min(185, tds)); // clip to normal
-
-                    // Dissolved Oxygen: normally 5.0–7.5 mg/L (Table II)
-                    double dO = 7.0 - 0.04 * (temp - 25)
-                                    + rng.nextGaussian() * 0.25;
-                    dO = Math.max(4.1, Math.min(9.0, dO)); // clip above anomaly threshold
-
-                    // ── ANOMALY INJECTION (8% rate) ──────────────────────────
-                    boolean anomaly = rng.nextDouble() < 0.08;
-
-                    if (anomaly) {
-                        int type = rng.nextInt(4);
-                        switch (type) {
-                            case 0:
-                                // Acid discharge: pH < 6.0 (Table II anomaly threshold)
-                                pH = 4.2 + rng.nextDouble() * 1.5; // 4.2–5.7
-                                break;
-                            case 1:
-                                // FIX-4: Industrial effluent: TDS > 1000 mg/L (Table II)
-                                tds = 1100 + rng.nextDouble() * 900; // 1100–2000 mg/L
-                                break;
-                            case 2:
-                                // Oxygen depletion: DO < 4.0 mg/L (Table IV threshold)
-                                dO = 1.5 + rng.nextDouble() * 2.3; // 1.5–3.8 mg/L
-                                break;
-                            case 3:
-                                // Thermal pollution: |ΔT| ≥ 3°C (Table IV threshold)
-                                temp = temp + 3.0 + rng.nextDouble() * 4; // +3–7°C jump
-                                break;
-                        }
-                    }
-
-                    data.add(new SensorRecord(
-                            node, day, minute,
-                            pH, temp, tds, dO,   // FIX-4: tds replaces turb
-                            battery, ci, anomaly));
-                }
+        try {
+            File f = new File(XLSX_PATH);
+            if (!f.exists()) {
+                // Backwards compatibility with older layouts / working dirs.
+                File alt = new File("padma_synthetic_17280_v6_with_CI.xlsx");
+                if (alt.exists()) f = alt;
             }
+            if (!f.exists()) {
+                throw new FileNotFoundException("Dataset not found at: " + XLSX_PATH);
+            }
+
+            try (ZipFile zip = new ZipFile(f)) {
+
+                List<String> sharedStrings = SimpleXlsx.readSharedStrings(zip);
+                ZipEntry sheetEntry = SimpleXlsx.findFirstSheet(zip);
+                if (sheetEntry == null) {
+                    throw new IOException("No worksheet XML found inside XLSX: " + f.getPath());
+                }
+
+                SimpleXlsx.parseSheet(zip, sheetEntry, sharedStrings, new SimpleXlsx.RowConsumer() {
+
+                    private Map<String, Integer> colIndex;
+
+                    @Override
+                    public void accept(int rowNumber1Based, Map<Integer, String> cells) {
+
+                        // Row 1 is the header row.
+                        if (rowNumber1Based == 1) {
+                            colIndex = new HashMap<>();
+                            for (Map.Entry<Integer, String> e : cells.entrySet()) {
+                                String key = e.getValue();
+                                if (key != null) {
+                                    colIndex.put(key.trim(), e.getKey());
+                                }
+                            }
+                            return;
+                        }
+
+                        if (colIndex == null || colIndex.isEmpty()) return;
+
+                        Integer colNode  = colIndex.get("node_id");
+                        Integer colDay   = colIndex.get("day_of_simulation");
+                        Integer colTime  = colIndex.get("time");
+                        Integer colPH    = colIndex.get("pH");
+                        Integer colTemp  = colIndex.get("temperature_C");
+                        Integer colTDS   = colIndex.get("TDS_mgl");
+                        Integer colDO    = colIndex.get("DO_mgl");
+                        Integer colLabel = colIndex.get("label");
+                        Integer colCI    = colIndex.get("CI_gCO2_per_kWh");
+
+                        if (colNode == null || colDay == null || colTime == null || colPH == null
+                                || colTemp == null || colTDS == null || colDO == null
+                                || colLabel == null || colCI == null) {
+                            throw new IllegalStateException(
+                                    "Missing required columns in XLSX header. Found columns: " + colIndex.keySet());
+                        }
+
+                        String nodeStr = SimpleXlsx.getCell(cells, colNode);
+                        if (nodeStr == null || nodeStr.trim().isEmpty()) return;
+                        int node = SimpleXlsx.parseNodeId(nodeStr);
+
+                        int day = SimpleXlsx.parseIntCell(SimpleXlsx.getCell(cells, colDay));
+
+                        int minute = SimpleXlsx.parseMinuteOfDay(SimpleXlsx.getCell(cells, colTime));
+
+                        double pH   = SimpleXlsx.parseDoubleCell(SimpleXlsx.getCell(cells, colPH));
+                        double temp = SimpleXlsx.parseDoubleCell(SimpleXlsx.getCell(cells, colTemp));
+                        double tds  = SimpleXlsx.parseDoubleCell(SimpleXlsx.getCell(cells, colTDS));
+                        double dO   = SimpleXlsx.parseDoubleCell(SimpleXlsx.getCell(cells, colDO));
+
+                        boolean isAnomaly = SimpleXlsx.parseIntCell(SimpleXlsx.getCell(cells, colLabel)) == 1;
+                        double ci = SimpleXlsx.parseDoubleCell(SimpleXlsx.getCell(cells, colCI));
+
+                        data.add(new SensorRecord(
+                                node, day, minute,
+                                pH, temp, tds, dO,
+                                100.0, ci, isAnomaly));
+                    }
+                });
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException(
+                "Failed to load dataset from: " + XLSX_PATH
+                + "\nEnsure the file is in the working directory.\n" + e.getMessage(), e);
         }
 
         return data;
+    }
+
+    /**
+     * Minimal XLSX (OOXML) reader implemented using only JDK ZIP + SAX.
+     * This avoids external dependencies such as Apache POI.
+     */
+    static class SimpleXlsx {
+
+        interface RowConsumer {
+            void accept(int rowNumber1Based, Map<Integer, String> cells);
+        }
+
+        static String getCell(Map<Integer, String> cells, int col) {
+            return cells.get(col);
+        }
+
+        static ZipEntry findFirstSheet(ZipFile zip) {
+            ZipEntry sheet1 = zip.getEntry("xl/worksheets/sheet1.xml");
+            if (sheet1 != null) return sheet1;
+
+            ZipEntry first = null;
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry e = entries.nextElement();
+                String name = e.getName();
+                if (name != null && name.startsWith("xl/worksheets/") && name.endsWith(".xml")) {
+                    if (first == null || name.compareTo(first.getName()) < 0) {
+                        first = e;
+                    }
+                }
+            }
+            return first;
+        }
+
+        static List<String> readSharedStrings(ZipFile zip) throws IOException {
+            ZipEntry sst = zip.getEntry("xl/sharedStrings.xml");
+            if (sst == null) return Collections.emptyList();
+
+            final List<String> out = new ArrayList<>();
+            try (InputStream in = zip.getInputStream(sst)) {
+                SAXParserFactory spf = SAXParserFactory.newInstance();
+                spf.setNamespaceAware(false);
+                SAXParser parser = spf.newSAXParser();
+
+                DefaultHandler handler = new DefaultHandler() {
+                    private boolean inT = false;
+                    private StringBuilder currentSi;
+
+                    @Override
+                    public void startElement(String uri, String localName, String qName, Attributes attributes) {
+                        if ("si".equals(qName)) {
+                            currentSi = new StringBuilder();
+                        } else if ("t".equals(qName) && currentSi != null) {
+                            inT = true;
+                        }
+                    }
+
+                    @Override
+                    public void characters(char[] ch, int start, int length) {
+                        if (inT && currentSi != null) {
+                            currentSi.append(ch, start, length);
+                        }
+                    }
+
+                    @Override
+                    public void endElement(String uri, String localName, String qName) {
+                        if ("t".equals(qName)) {
+                            inT = false;
+                        } else if ("si".equals(qName) && currentSi != null) {
+                            out.add(currentSi.toString());
+                            currentSi = null;
+                        }
+                    }
+                };
+
+                parser.parse(in, handler);
+            } catch (ParserConfigurationException | SAXException e) {
+                throw new IOException("Failed parsing sharedStrings.xml", e);
+            }
+
+            return out;
+        }
+
+        static void parseSheet(
+                ZipFile zip,
+                ZipEntry sheetEntry,
+                List<String> sharedStrings,
+                RowConsumer consumer) throws IOException {
+
+            try (InputStream in = zip.getInputStream(sheetEntry)) {
+                SAXParserFactory spf = SAXParserFactory.newInstance();
+                spf.setNamespaceAware(false);
+                SAXParser parser = spf.newSAXParser();
+
+                DefaultHandler handler = new DefaultHandler() {
+
+                    private int currentRow = -1;
+                    private Map<Integer, String> currentCells;
+
+                    private String cellRef;
+                    private String cellType;
+                    private boolean inV = false;
+                    private boolean inInlineT = false;
+                    private StringBuilder valueBuf;
+
+                    @Override
+                    public void startElement(String uri, String localName, String qName, Attributes attributes) {
+                        if ("row".equals(qName)) {
+                            String r = attributes.getValue("r");
+                            currentRow = r == null ? -1 : Integer.parseInt(r);
+                            currentCells = new HashMap<>();
+                        } else if ("c".equals(qName)) {
+                            cellRef = attributes.getValue("r");
+                            cellType = attributes.getValue("t");
+                            valueBuf = new StringBuilder();
+                        } else if ("v".equals(qName)) {
+                            inV = true;
+                        } else if ("t".equals(qName)) {
+                            // inlineStr uses <is><t>
+                            if ("inlineStr".equals(cellType)) {
+                                inInlineT = true;
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void characters(char[] ch, int start, int length) {
+                        if ((inV || inInlineT) && valueBuf != null) {
+                            valueBuf.append(ch, start, length);
+                        }
+                    }
+
+                    @Override
+                    public void endElement(String uri, String localName, String qName) {
+                        if ("v".equals(qName)) {
+                            inV = false;
+                        } else if ("t".equals(qName)) {
+                            inInlineT = false;
+                        } else if ("c".equals(qName)) {
+                            if (cellRef != null) {
+                                int col = columnIndexFromCellRef(cellRef);
+                                String raw = valueBuf == null ? null : valueBuf.toString();
+                                String resolved = resolveCellValue(raw, cellType, sharedStrings);
+                                currentCells.put(col, resolved);
+                            }
+                            cellRef = null;
+                            cellType = null;
+                            valueBuf = null;
+                        } else if ("row".equals(qName)) {
+                            if (currentRow > 0 && currentCells != null) {
+                                consumer.accept(currentRow, currentCells);
+                            }
+                            currentRow = -1;
+                            currentCells = null;
+                        }
+                    }
+                };
+
+                parser.parse(in, handler);
+
+            } catch (ParserConfigurationException | SAXException e) {
+                throw new IOException("Failed parsing worksheet: " + sheetEntry.getName(), e);
+            }
+        }
+
+        private static String resolveCellValue(String raw, String type, List<String> sharedStrings) {
+            if (raw == null) return null;
+            String trimmed = raw.trim();
+            if (trimmed.isEmpty()) return "";
+
+            if ("s".equals(type)) {
+                // Shared string index
+                int idx = Integer.parseInt(trimmed);
+                if (idx >= 0 && idx < sharedStrings.size()) {
+                    return sharedStrings.get(idx);
+                }
+                return trimmed;
+            }
+            return trimmed;
+        }
+
+        private static int columnIndexFromCellRef(String cellRef) {
+            int i = 0;
+            while (i < cellRef.length() && Character.isLetter(cellRef.charAt(i))) i++;
+            String letters = cellRef.substring(0, i).toUpperCase(Locale.ROOT);
+            int col = 0;
+            for (int j = 0; j < letters.length(); j++) {
+                col = col * 26 + (letters.charAt(j) - 'A' + 1);
+            }
+            return col - 1;
+        }
+
+        static int parseNodeId(String nodeStr) {
+            String s = nodeStr.trim().toUpperCase(Locale.ROOT);
+            // Expected: NODE_01..NODE_08
+            s = s.replace("NODE", "").replace("_", "").trim();
+            int n = Integer.parseInt(s);
+            return n - 1;
+        }
+
+        static int parseMinuteOfDay(String timeStr) {
+            if (timeStr == null) return 0;
+            String s = timeStr.trim();
+            if (s.isEmpty()) return 0;
+            if (s.contains(":")) {
+                String[] parts = s.split(":");
+                int hh = Integer.parseInt(parts[0].trim());
+                int mm = Integer.parseInt(parts[1].trim());
+                return hh * 60 + mm;
+            }
+
+            // Excel serial time (fraction of day)
+            try {
+                double d = Double.parseDouble(s);
+                double frac = d - Math.floor(d);
+                return (int) Math.round(frac * 24.0 * 60.0);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+
+        static int parseIntCell(String value) {
+            if (value == null) return 0;
+            String s = value.trim();
+            if (s.isEmpty()) return 0;
+            try {
+                if (s.indexOf('.') >= 0) {
+                    return (int) Math.round(Double.parseDouble(s));
+                }
+                return Integer.parseInt(s);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+
+        static double parseDoubleCell(String value) {
+            if (value == null) return 0.0;
+            String s = value.trim();
+            if (s.isEmpty()) return 0.0;
+            try {
+                return Double.parseDouble(s);
+            } catch (NumberFormatException e) {
+                return 0.0;
+            }
+        }
     }
 
 
