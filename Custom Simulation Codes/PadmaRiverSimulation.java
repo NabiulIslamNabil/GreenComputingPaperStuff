@@ -1340,9 +1340,9 @@ public class PadmaRiverSimulation {
             prevTempPerNode[n]     = r.temp;
 
             // Table IV thresholds: pH <6.0/>8.5, TDS >1000, DO <4.0, |ΔT|≥3°C
-            boolean immediateAlert = r.pH  < 6.0  || r.pH > 8.5
-                                  || r.tds > 1000.0
-                                  || r.dO  < 4.0
+            boolean immediateAlert = r.pH < 6.0 || r.pH > 9.0
+                                  || r.tds < 50.0 || r.tds > 800.0
+                                  || r.dO < 2.0 || r.dO > 14.0
                                   || tempSpike;
 
             // Algorithm 2 Line 3: threshold breach → P = 1.0; skip further
