@@ -800,7 +800,7 @@ public class PadmaRiverSimulation {
 
         /** Path to the pre-built xlsx dataset. Adjust if the file is elsewhere. */
         static final String XLSX_PATH =
-            "src/org/fog/test/padma/padma_synthetic_17280_v6_with_CI.xlsx";
+            "src/org/fog/test/padma/merged_padma_v5_v6_selected.xlsx";
 
     static List<SensorRecord> generateData() {
 
@@ -1333,6 +1333,7 @@ public class PadmaRiverSimulation {
         int cntTP = 0;
         int cntFP = 0;
         int cntFN = 0;
+        int cntTN = 0;
 
         for (SensorRecord r : data) {
 
@@ -1399,11 +1400,14 @@ public class PadmaRiverSimulation {
                 network += net;
                 latency += lat;
 
+                // Classification metrics must be computed from the anomaly
+                // detector output (Algorithm 2). `P` is the fused anomaly
+                // probability produced by computeRCASProbability(...).
+                // Use the detector threshold `P > 0.80` to form predictedAnomaly.
+                // Scheduler actions (LOCAL/CLOUD/BUFFER) are Algorithm 3 outputs
+                // and must NOT be used for TP/TN/FP/FN computation.
                 boolean trueAnomaly      = bs.record.isAnomaly;
-                boolean predictedAnomaly = forcedRelease
-                        ? P > 0.80
-                        : (finalDecision == LOCAL || finalDecision == CLOUD);
-
+                boolean predictedAnomaly = (P > 0.80);
                 boolean tp = trueAnomaly  && predictedAnomaly;
                 boolean tn = !trueAnomaly && !predictedAnomaly;
                 boolean fp = !trueAnomaly && predictedAnomaly;
@@ -1411,6 +1415,7 @@ public class PadmaRiverSimulation {
 
                 if (tp || tn) detected++;
                 if (tp) cntTP++;
+                if (tn) cntTN++;
                 if (fp) cntFP++;
                 if (fn) cntFN++;
             }
@@ -1619,9 +1624,10 @@ public class PadmaRiverSimulation {
             // Precision, Recall and F1 can be derived after the loop.
             // Previously only (tp || tn) was accumulated in `detected`, making
             // it impossible to compute the three metrics the paper requires.
+            // Classification metrics are derived from Algorithm 2's
+            // anomaly detector probability `P` (not from scheduler actions).
             boolean trueAnomaly      = r.isAnomaly;
-            boolean predictedAnomaly = (decision == LOCAL || decision == CLOUD);
-
+            boolean predictedAnomaly = (P > 0.80);
             boolean tp = trueAnomaly  && predictedAnomaly;
             boolean tn = !trueAnomaly && !predictedAnomaly;
             boolean fp = !trueAnomaly && predictedAnomaly;  // FIX-D
@@ -1629,6 +1635,7 @@ public class PadmaRiverSimulation {
 
             if (tp || tn) detected++;
             if (tp) cntTP++;   // FIX-D
+            if (tn) cntTN++;
             if (fp) cntFP++;   // FIX-D
             if (fn) cntFN++;   // FIX-D
         }
@@ -1668,11 +1675,12 @@ public class PadmaRiverSimulation {
             network += net;
             latency += lat;
 
+            // When resolving buffered samples, classification still comes
+            // from the anomaly detector probability `P` (Algorithm 2).
+            // Use the detector threshold for predictedAnomaly; do NOT use
+            // scheduler finalDecision values for the confusion matrix.
             boolean trueAnomaly      = bs.record.isAnomaly;
-            boolean predictedAnomaly = forcedRelease
-                    ? P > 0.80
-                    : (finalDecision == LOCAL || finalDecision == CLOUD);
-
+            boolean predictedAnomaly = (P > 0.80);
             boolean tp = trueAnomaly  && predictedAnomaly;
             boolean tn = !trueAnomaly && !predictedAnomaly;
             boolean fp = !trueAnomaly && predictedAnomaly;
@@ -1680,6 +1688,7 @@ public class PadmaRiverSimulation {
 
             if (tp || tn) detected++;
             if (tp) cntTP++;
+            if (tn) cntTN++;
             if (fp) cntFP++;
             if (fn) cntFN++;
         }
@@ -1720,8 +1729,33 @@ public class PadmaRiverSimulation {
                            ? (double) cntTP / (cntTP + cntFN)
                            : 0.0;
         double f1        = (precision + recall > 0.0)
-                           ? 2.0 * precision * recall / (precision + recall)
-                           : 0.0;
+                   ? 2.0 * precision * recall / (precision + recall)
+                   : 0.0;
+
+        System.out.println();
+        System.out.println("=========== RCAS CONFUSION MATRIX ===========");
+        System.out.println("TP = " + cntTP);
+        System.out.println("TN = " + cntTN);
+        System.out.println("FP = " + cntFP);
+        System.out.println("FN = " + cntFN);
+
+        double precisionCheck =
+            (cntTP + cntFP > 0)
+            ? (double) cntTP / (cntTP + cntFP)
+            : 0.0;
+
+        double recallCheck =
+            (cntTP + cntFN > 0)
+            ? (double) cntTP / (cntTP + cntFN)
+            : 0.0;
+
+        System.out.println("Precision Check = " + precisionCheck);
+        System.out.println("Recall Check    = " + recallCheck);
+        System.out.println();
+
+        // NOTE: removed duplicate probability-based confusion matrix.
+        // Classification metrics are computed from the detector probability
+        // (`P > 0.80`) above; only the single RCAS confusion matrix is printed.
 
         System.out.println();
         System.out.println("========== FINAL DECISION SPLIT ==========");
