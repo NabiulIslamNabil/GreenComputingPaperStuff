@@ -126,12 +126,11 @@ package org.fog.test.padma;
 //                                    node→day→sample order.  Now documented
 //                                    explicitly so a future data-order change
 //                                    cannot silently break the CI calibration.
-//  FIX-24 BUFFER = non-anomaly doc   predictedAnomaly = (LOCAL || CLOUD) means
-//                                    BUFFER is treated as "predicted non-anomaly"
-//                                    for the Accuracy / Precision / Recall / F1
-//                                    formulae.  The paper (Table V) does not
-//                                    specify how deferred samples count; this
-//                                    design choice is now explicitly stated.
+//  FIX-24 BUFFER deferral doc        BUFFER samples are deferred, re-evaluated,
+//                                    and classified only after resolution or
+//                                    forced release.  The paper (Table V) does
+//                                    not specify how deferred samples count;
+//                                    this design choice is now explicitly stated.
 //  FIX-25 Algorithm 3 Line 8 bound  REVERTED — paper Algorithm 3 Line 8 is
 //                                    confirmed as "if 0.4 ≤ P ≤ 0.8" with an
 //                                    INCLUSIVE lower bound (≤).  The previous
@@ -286,6 +285,7 @@ public class PadmaRiverSimulation {
     static final int CLOUD      = 0;
     static final int LOCAL      = 1;
     static final int BUFFER     = 2;
+    static final int MAX_BUFFER_CYCLES = 3;
     // FIX-13: PRE_BUFFER = 3 removed — Algorithm 3 has no PRE_BUFFER output.
 
     // FIX-14: fogDevices, sensors, actuators lists removed.
@@ -331,6 +331,25 @@ public class PadmaRiverSimulation {
             this.battery   = battery;
             this.ci        = ci;
             this.isAnomaly = isAnomaly;
+        }
+    }
+
+    static class BufferedSample {
+
+        SensorRecord record;
+
+        double probability;
+
+        int waitCycles;
+
+        BufferedSample(
+                SensorRecord record,
+                double probability,
+                int waitCycles) {
+
+            this.record = record;
+            this.probability = probability;
+            this.waitCycles = waitCycles;
         }
     }
 
@@ -1180,6 +1199,45 @@ public class PadmaRiverSimulation {
     //           [6] precision   [7] recall     [8] f1
     // ==========================================================
 
+    static double computeRCASProbability(
+            SensorRecord r,
+            DailyCalibration[] pHStats,
+            DailyCalibration[] tempStats,
+            DailyCalibration[] tdsStats,
+            DailyCalibration[] doStats,
+            boolean immediateAlert) {
+
+        int n = r.node;
+
+        if (immediateAlert) {
+            return 1.0;   // Algorithm 2, Line 3
+        }
+
+        if (!pHStats[n].isCalibrated()
+                || !tempStats[n].isCalibrated()
+                || !tdsStats[n].isCalibrated()
+                || !doStats[n].isCalibrated()) {
+
+            return 0.0;
+        }
+
+        double[] z = new double[4];
+        z[0] = Math.abs(RCASEngine.zScore(r.pH,   pHStats[n].mean(),   pHStats[n].std()));
+        z[1] = Math.abs(RCASEngine.zScore(r.temp, tempStats[n].mean(), tempStats[n].std()));
+        z[2] = Math.abs(RCASEngine.zScore(r.tds,  tdsStats[n].mean(),  tdsStats[n].std()));
+        z[3] = Math.abs(RCASEngine.zScore(r.dO,   doStats[n].mean(),   doStats[n].std()));
+
+        double[] probs = new double[4];
+        for (int i = 0; i < 4; i++)
+            probs[i] = RCASEngine.sigmoid(z[i]);
+
+        double[] sigma   = { pHStats[n].std(), tempStats[n].std(),
+                             tdsStats[n].std(), doStats[n].std() };
+        double[] weights = RCASEngine.adaptiveWeights(sigma);
+
+        return RCASEngine.fuse(probs, weights);
+    }
+
     static double[] runRCAS(List<SensorRecord> data) {
 
         // Per-parameter per-node calibration objects
@@ -1257,10 +1315,14 @@ public class PadmaRiverSimulation {
         double network = 0;
         double latency = 0;
 
+        Queue<BufferedSample> bufferQueue =
+                new LinkedList<>();
+
         int detected     = 0;
         int cntCloud     = 0;
         int cntLocal     = 0;
         int cntBuffer    = 0;
+        int cntBufferResolved = 0;
 
         // FIX-D: individual TP/FP/FN counters required for Precision, Recall,
         // F1-score (Paper Section IV: "Precision, Recall and F1-score are also
@@ -1273,6 +1335,85 @@ public class PadmaRiverSimulation {
         int cntFN = 0;
 
         for (SensorRecord r : data) {
+
+            int queueSize = bufferQueue.size();
+
+            for (int i = 0; i < queueSize; i++) {
+
+                BufferedSample bs = bufferQueue.poll();
+
+                bs.waitCycles++;
+
+                double battery =
+                    nodeBattery[bs.record.node] / 100.0;
+
+                double ciAvg =
+                    ciStats.isCalibrated()
+                    ? ciStats.mean()
+                    : bs.record.ci;
+
+                double P =
+                    computeRCASProbability(
+                        bs.record,
+                        pHStats,
+                        tempStats,
+                        tdsStats,
+                        doStats,
+                        false);
+
+                int newDecision =
+                    RCASEngine.decide(
+                        P,
+                        battery,
+                        bs.record.ci,
+                        ciAvg);
+
+                if (newDecision == BUFFER
+                        && bs.waitCycles < MAX_BUFFER_CYCLES) {
+
+                    bufferQueue.add(bs);
+
+                    continue;
+                }
+
+                boolean forcedRelease = newDecision == BUFFER;
+                int finalDecision = (newDecision == BUFFER)
+                        ? LOCAL
+                        : newDecision;
+
+                cntBufferResolved++;
+
+                if      (finalDecision == CLOUD) cntCloud++;
+                else if (finalDecision == LOCAL) cntLocal++;
+
+                double e        = RCASEngine.energy(finalDecision, P);
+                double drainPct = (e / BATTERY_MWH) * 100.0;
+                nodeBattery[bs.record.node]  = Math.max(2.0, nodeBattery[bs.record.node] - drainPct);
+
+                double c   = RCASEngine.operationalCarbon(e, bs.record.ci);
+                double net = RCASEngine.network(finalDecision);
+                double lat = RCASEngine.latency(finalDecision);
+
+                energy  += e;
+                carbon  += c;
+                network += net;
+                latency += lat;
+
+                boolean trueAnomaly      = bs.record.isAnomaly;
+                boolean predictedAnomaly = forcedRelease
+                        ? P > 0.80
+                        : (finalDecision == LOCAL || finalDecision == CLOUD);
+
+                boolean tp = trueAnomaly  && predictedAnomaly;
+                boolean tn = !trueAnomaly && !predictedAnomaly;
+                boolean fp = !trueAnomaly && predictedAnomaly;
+                boolean fn =  trueAnomaly && !predictedAnomaly;
+
+                if (tp || tn) detected++;
+                if (tp) cntTP++;
+                if (fp) cntFP++;
+                if (fn) cntFN++;
+            }
 
             int n = r.node;
 
@@ -1348,54 +1489,37 @@ public class PadmaRiverSimulation {
             // Algorithm 2 Line 3: threshold breach → P = 1.0; skip further
             // computation. Decision is always CLOUD for immediate alerts
             // (Fig. 2: threshold breach → "Immediate Alert" → "Send to Cloud").
-            double P;
-            if (immediateAlert) {
-                P = 1.0;   // Algorithm 2, Line 3
-            } else {
-                // ── FIX-B: Calibration guard ────────────────────────────────
-                // Algorithm 1 requires a full day of observed readings before
-                // µs / σs are valid. If any parameter's calibration object has
-                // not yet completed its first midnightReset(), skip Stages 2-4
-                // and fall through to BUFFER (low-urgency energy-saving default).
-                // This is correct behaviour: an uncalibrated node cannot reliably
-                // estimate anomaly probability and should defer until it has a
-                // valid baseline, which is the conservative, safe choice.
-                if (!pHStats[n].isCalibrated()
-                        || !tempStats[n].isCalibrated()
-                        || !tdsStats[n].isCalibrated()
-                        || !doStats[n].isCalibrated()) {
-
-                    // Uncalibrated: cannot compute valid z-scores.
-                    // Default to BUFFER (Algorithm 3, Line 10: P < 0.4 path).
-                    // Use a nominal low P so energy() reflects the BUFFER cost.
-                    P = 0.0;
-                } else {
-                    // ── ALGORITHM 2 STAGE 2: Z-score normalisation ────────────
-                    // Algorithm 2, Lines 4-5. z-scores are absolute (|z|) so that
-                    // both under-readings (DO depletion) and over-readings (TDS
-                    // spike) map to high anomaly probability through the sigmoid.
-                    double[] z = new double[4];
-                    z[0] = Math.abs(RCASEngine.zScore(r.pH,   pHStats[n].mean(),   pHStats[n].std()));
-                    z[1] = Math.abs(RCASEngine.zScore(r.temp, tempStats[n].mean(), tempStats[n].std()));
-                    z[2] = Math.abs(RCASEngine.zScore(r.tds,  tdsStats[n].mean(),  tdsStats[n].std()));
-                    z[3] = Math.abs(RCASEngine.zScore(r.dO,   doStats[n].mean(),   doStats[n].std()));
-
-                    // ── ALGORITHM 2 STAGE 2 (cont.) + STAGE 3: Sigmoid + weights
-                    // Algorithm 2, Lines 5-8. Sigmoid (Eq. 4) maps |z| → per-sensor
-                    // probability Ps. Adaptive weights (Eq. 5) use frozen σs.
-                    double[] probs = new double[4];
-                    for (int i = 0; i < 4; i++)
-                        probs[i] = RCASEngine.sigmoid(z[i]);
-
-                    double[] sigma   = { pHStats[n].std(), tempStats[n].std(),
-                                         tdsStats[n].std(), doStats[n].std() };
-                    double[] weights = RCASEngine.adaptiveWeights(sigma);
-
-                    // ── ALGORITHM 2 STAGE 4: Max-average fusion ───────────────
-                    // Algorithm 2, Line 9 — Equation 6.
-                    P = RCASEngine.fuse(probs, weights);
-                }
-            }
+            // ── FIX-B: Calibration guard ────────────────────────────────
+            // Algorithm 1 requires a full day of observed readings before
+            // µs / σs are valid. If any parameter's calibration object has
+            // not yet completed its first midnightReset(), skip Stages 2-4
+            // and fall through to BUFFER (low-urgency energy-saving default).
+            // This is correct behaviour: an uncalibrated node cannot reliably
+            // estimate anomaly probability and should defer until it has a
+            // valid baseline, which is the conservative, safe choice.
+            //
+            // Uncalibrated: cannot compute valid z-scores.
+            // Default to BUFFER (Algorithm 3, Line 10: P < 0.4 path).
+            // Use a nominal low P so energy() reflects the BUFFER cost.
+            //
+            // ── ALGORITHM 2 STAGE 2: Z-score normalisation ────────────
+            // Algorithm 2, Lines 4-5. z-scores are absolute (|z|) so that
+            // both under-readings (DO depletion) and over-readings (TDS
+            // spike) map to high anomaly probability through the sigmoid.
+            //
+            // ── ALGORITHM 2 STAGE 2 (cont.) + STAGE 3: Sigmoid + weights
+            // Algorithm 2, Lines 5-8. Sigmoid (Eq. 4) maps |z| → per-sensor
+            // probability Ps. Adaptive weights (Eq. 5) use frozen σs.
+            //
+            // ── ALGORITHM 2 STAGE 4: Max-average fusion ───────────────
+            // Algorithm 2, Line 9 — Equation 6.
+            double P = computeRCASProbability(
+                    r,
+                    pHStats,
+                    tempStats,
+                    tdsStats,
+                    doStats,
+                    immediateAlert);
 
             double battery = nodeBattery[n] / 100.0;
 
@@ -1430,6 +1554,21 @@ public class PadmaRiverSimulation {
             int decision = immediateAlert
                     ? CLOUD
                     : RCASEngine.decide(P, battery, r.ci, ciAvg);
+
+            if (decision == BUFFER) {
+
+                bufferQueue.add(
+                    new BufferedSample(
+                        r,
+                        P,
+                        0
+                    )
+                );
+
+                cntBuffer++;
+
+                continue;
+            }
 
             if      (decision == CLOUD) cntCloud++;
             else if (decision == LOCAL) cntLocal++;
@@ -1466,16 +1605,14 @@ public class PadmaRiverSimulation {
             // Recall      = TP / (TP + FN)
             // F1          = 2 · Precision · Recall / (Precision + Recall)
             //
-            // FIX-24: BUFFER = predicted non-anomaly (design choice, not in paper).
-            // predictedAnomaly is defined as (decision == LOCAL || decision == CLOUD).
+            // FIX-24: BUFFER defers classification (design choice, not in paper).
+            // predictedAnomaly is defined only after the sample is resolved.
             // BUFFER means the system deferred the sample — it made no active
-            // anomaly prediction for that reading.  Treating BUFFER as "predicted
-            // non-anomaly" (i.e. TN when trueAnomaly=false) is the natural
-            // interpretation: the scheduler decided the sample did not warrant
-            // immediate action, which aligns with a non-anomaly classification.
-            // The paper (Table V, Accuracy definition) does not specify how
-            // deferred/buffered samples should be counted — this is a simulation
-            // design assumption explicitly stated here.
+            // anomaly prediction for that reading yet. Buffered samples are
+            // re-evaluated, and final classification occurs only after resolution
+            // or forced release. The paper (Table V, Accuracy definition) does
+            // not specify how deferred/buffered samples should be counted — this
+            // is a simulation design assumption explicitly stated here.
             // PRE_BUFFER removed: Algorithm 3 has no such output action.
             //
             // FIX-D: tp, fp, fn are now each counted individually so that
@@ -1494,6 +1631,57 @@ public class PadmaRiverSimulation {
             if (tp) cntTP++;   // FIX-D
             if (fp) cntFP++;   // FIX-D
             if (fn) cntFN++;   // FIX-D
+        }
+
+        while (!bufferQueue.isEmpty()) {
+
+            BufferedSample bs =
+                bufferQueue.poll();
+
+            cntBufferResolved++;
+
+            double P =
+                computeRCASProbability(
+                    bs.record,
+                    pHStats,
+                    tempStats,
+                    tdsStats,
+                    doStats,
+                    false);
+
+            boolean forcedRelease = true;
+            int finalDecision = LOCAL;
+
+            if      (finalDecision == CLOUD) cntCloud++;
+            else if (finalDecision == LOCAL) cntLocal++;
+
+            double e        = RCASEngine.energy(finalDecision, P);
+            double drainPct = (e / BATTERY_MWH) * 100.0;
+            nodeBattery[bs.record.node]  = Math.max(2.0, nodeBattery[bs.record.node] - drainPct);
+
+            double c   = RCASEngine.operationalCarbon(e, bs.record.ci);
+            double net = RCASEngine.network(finalDecision);
+            double lat = RCASEngine.latency(finalDecision);
+
+            energy  += e;
+            carbon  += c;
+            network += net;
+            latency += lat;
+
+            boolean trueAnomaly      = bs.record.isAnomaly;
+            boolean predictedAnomaly = forcedRelease
+                    ? P > 0.80
+                    : (finalDecision == LOCAL || finalDecision == CLOUD);
+
+            boolean tp = trueAnomaly  && predictedAnomaly;
+            boolean tn = !trueAnomaly && !predictedAnomaly;
+            boolean fp = !trueAnomaly && predictedAnomaly;
+            boolean fn =  trueAnomaly && !predictedAnomaly;
+
+            if (tp || tn) detected++;
+            if (tp) cntTP++;
+            if (fp) cntFP++;
+            if (fn) cntFN++;
         }
 
         double nodeDays    = (double) NUM_NODES * SIM_DAYS;
@@ -1540,6 +1728,8 @@ public class PadmaRiverSimulation {
         System.out.println("Cloud  : " + cntCloud);
         System.out.println("Local  : " + cntLocal);
         System.out.println("Buffer : " + cntBuffer);
+        System.out.println("Resolved Buffer : "
+                + cntBufferResolved);
 
         // FIX-D: indices [6][7][8] = precision, recall, f1
         // main() reads these at rcas[6], rcas[7], rcas[8].
@@ -1571,8 +1761,8 @@ public class PadmaRiverSimulation {
     //   [8] f1.
     //
     //   RCAS (runRCAS):
-    //     predictedAnomaly = (decision == LOCAL || decision == CLOUD)
-    //     BUFFER           = predicted non-anomaly (FIX-24)
+    //     predictedAnomaly = resolved scheduler/inference outcome
+    //     BUFFER           = deferred, re-evaluated, then classified (FIX-24)
     //     TN, FN are both possible → Accuracy, Precision, Recall, F1 are all
     //     meaningfully different from each other.
     //
