@@ -1,0 +1,52 @@
+==========================================
+ FULL PAPER-ALIGNED RCAS SIMULATION
+ 8 nodes ? 15 days ? 144 samples = 17,280
+==========================================
+Generated 17280 records.
+
+=========== RCAS CONFUSION MATRIX ===========
+TP = 1753
+TN = 8575
+FP = 6616
+FN = 336
+Classified samples  : 17280  (FIX-38: excludes 0 uncalibrated Day-1 samples)
+Precision Check     : 0.2095
+Recall Check        : 0.8392
+
+========== FINAL DECISION SPLIT ==========
+Cloud          : 6659
+Local          : 10621
+Buffer (queued): 8911
+Buffer resolved: 8911
+
+================ COMPARISON TABLE (Table V) ================
+Metric                   RCAS         Cloud        Local        Threshold   
+Energy (mWh/node-day)    290.7328     468.0000     195.8400     289.1550    
+Carbon (gCO2/node-day)   180.227104   290.145912   121.414905   179.248848  
+Network (B/node-day)     1790.67      4608.00      0.00         2068.53     
+Latency (ms)             51.16        185.00       12.00        77.25       
+BattLife (days)          38.18        23.72        56.68        38.39       
+
+===== DETECTION METRICS (RCAS & Simple Threshold only) =====
+  Note: Always-Cloud/Local have no detection logic and are
+  excluded from this table.  Detection metrics measure the
+  anomaly-classification layer, which only RCAS and Simple
+  Threshold implement.  All values from sample-level counters.
+RCAS                  Precision: 0.2095    Recall: 0.8392    F1: 0.3352
+Simple Threshold      Precision: 0.2693    Recall: 1.0000    F1: 0.4243
+
+=========== RCAS VS ALWAYS CLOUD ===========
+Energy Reduction : 37.88 %
+Carbon Reduction : 37.88 %
+Network Reduction: 61.14 %
+
+=========== RCAS VS ALWAYS LOCAL ===========
+Energy Reduction : -48.45 %
+Carbon Reduction : -48.44 %
+
+=========== RCAS VS SIMPLE THRESHOLD ===========
+Energy Reduction : -0.55 %
+Carbon Reduction : -0.55 %
+Network Reduction: 13.43 %
+
+Simulation complete.
