@@ -1,5 +1,5 @@
 CA-EDR Decision Tree Evaluation Report — Model B (Enriched v5)
-Generated: 2026-06-02 19:04:32
+Generated: 2026-06-16 01:07:46
 ======================================================================
 
 
@@ -37,6 +37,12 @@ STEP 2 — Stratified sampling
     AC3_DO_pH_TDS                     12 rows
 
 ======================================================================
+STEP 2B — Injecting sensor-realistic noise
+======================================================================
+  Applied Gaussian noise: pH±0.12, DO±0.30 mg/L, TDS±15.0 mg/L, Temp±0.50 C
+  Labels unchanged (ground truth preserved)
+
+======================================================================
 STEP 3 — Shuffle and 70/15/15 split
 ======================================================================
   Train : 1750  (817 anomaly / 933 normal)
@@ -48,81 +54,102 @@ STEP 4 — Training Decision Tree
 ======================================================================
   Hyperparameters:
     criterion              = gini
-    max_depth              = 3
+    max_depth              = 4
     min_samples_split      = 15
     min_samples_leaf       = 8
     class_weight           = balanced
     random_state           = 42
 
-  Trained — depth: 3  leaves: 4  nodes: 7
+  Trained — depth: 4  leaves: 11  nodes: 21
 
 ======================================================================
 STEP 5 — Test set evaluation
 ======================================================================
-  Accuracy           : 0.9680  (96.80%)
-  Precision (anomaly): 0.9939
-  Recall    (anomaly): 0.9371   <- proportion of real anomalies caught
-  F1        (anomaly): 0.9647
-  ROC-AUC            : 0.9661
+  Accuracy           : 0.9573  (95.73%)
+  Precision (anomaly): 0.9877
+  Recall    (anomaly): 0.9200   <- proportion of real anomalies caught
+  F1        (anomaly): 0.9527
+  ROC-AUC            : 0.9564
 
   Confusion Matrix:
-    TN=199  FP=1
-    FN=11  TP=164
+    TN=198  FP=2
+    FN=14  TP=161
 
   Feature Importance:
-    DO_mgl           0.5263  XXXXXXXXXXXXXXXXXXXXX
-    pH               0.4737  XXXXXXXXXXXXXXXXXX
-    temperature_C    0.0000  
-    TDS_mgl          0.0000  
+    DO_mgl           0.4655  XXXXXXXXXXXXXXXXXX
+    pH               0.3772  XXXXXXXXXXXXXXX
+    TDS_mgl          0.1571  XXXXXX
+    temperature_C    0.0002  
 
   Classification Report:
               precision    recall  f1-score   support
 
-      Normal       0.95      0.99      0.97       200
-     Anomaly       0.99      0.94      0.96       175
+      Normal       0.93      0.99      0.96       200
+     Anomaly       0.99      0.92      0.95       175
 
-    accuracy                           0.97       375
-   macro avg       0.97      0.97      0.97       375
-weighted avg       0.97      0.97      0.97       375
+    accuracy                           0.96       375
+   macro avg       0.96      0.96      0.96       375
+weighted avg       0.96      0.96      0.96       375
 
-  Saved: results/classification_report_modelB.txt
+  Saved: results_noisy/classification_report_modelB.txt
 
 ======================================================================
 STEP 6 — 5-fold Stratified Cross-Validation
 ======================================================================
   Running 5-fold stratified cross-validation...
-    accuracy     mean=0.9624  std=0.0074  min=0.9560  max=0.9760
-    f1           mean=0.9581  std=0.0084  min=0.9509  max=0.9736
-    roc_auc      mean=0.9599  std=0.0078  min=0.9532  max=0.9742
-    precision    mean=0.9972  std=0.0037  min=0.9907  max=1.0000
-    recall       mean=0.9220  std=0.0138  min=0.9103  max=0.9485
+    accuracy     mean=0.9528  std=0.0095  min=0.9400  max=0.9680
+    f1           mean=0.9496  std=0.0100  min=0.9367  max=0.9658
+    roc_auc      mean=0.9692  std=0.0081  min=0.9580  max=0.9820
+    precision    mean=0.9473  std=0.0149  min=0.9212  max=0.9658
+    recall       mean=0.9520  std=0.0109  min=0.9359  max=0.9658
 
-  Saved: results/cross_validation_results.csv
+  Saved: results_noisy/cross_validation_results.csv
 
 ======================================================================
 STEP 7 — Generating visualisations
 ======================================================================
   7A: Confusion matrix...
-  Saved: results/confusion_matrix_modelB.png
+  Saved: results_noisy/confusion_matrix_modelB.png
   7B: Feature importance...
-  Saved: results/feature_importance_modelB.png
+  Saved: results_noisy/feature_importance_modelB.png
   7C: ROC curve...
-  Saved: results/roc_curve_modelB.png
+  Saved: results_noisy/roc_curve_modelB.png
   7D: Decision tree diagram...
-  Saved: results/decision_tree_modelB.png
-  Saved: results/decision_tree_rules_modelB.txt
+  Saved: results_noisy/decision_tree_modelB.png
+  Saved: results_noisy/decision_tree_rules_modelB.txt
 
   Decision Tree Rules:
-|--- DO_mgl <= 4.00
-|   |--- class: 1
-|--- DO_mgl >  4.00
-|   |--- pH <= 8.51
-|   |   |--- pH <= 6.01
-|   |   |   |--- class: 1
-|   |   |--- pH >  6.01
-|   |   |   |--- class: 0
-|   |--- pH >  8.51
+|--- DO_mgl <= 3.86
+|   |--- DO_mgl <= 3.52
 |   |   |--- class: 1
+|   |--- DO_mgl >  3.52
+|   |   |--- pH <= 7.16
+|   |   |   |--- temperature_C <= 23.15
+|   |   |   |   |--- class: 1
+|   |   |   |--- temperature_C >  23.15
+|   |   |   |   |--- class: 1
+|   |   |--- pH >  7.16
+|   |   |   |--- DO_mgl <= 3.76
+|   |   |   |   |--- class: 1
+|   |   |   |--- DO_mgl >  3.76
+|   |   |   |   |--- class: 1
+|--- DO_mgl >  3.86
+|   |--- pH <= 5.92
+|   |   |--- TDS_mgl <= 303.76
+|   |   |   |--- class: 1
+|   |   |--- TDS_mgl >  303.76
+|   |   |   |--- class: 1
+|   |--- pH >  5.92
+|   |   |--- pH <= 8.54
+|   |   |   |--- TDS_mgl <= 1000.24
+|   |   |   |   |--- class: 0
+|   |   |   |--- TDS_mgl >  1000.24
+|   |   |   |   |--- class: 1
+|   |   |--- pH >  8.54
+|   |   |   |--- pH <= 8.66
+|   |   |   |   |--- class: 1
+|   |   |   |--- pH >  8.66
+|   |   |   |   |--- class: 1
 
 
 ======================================================================
@@ -130,27 +157,27 @@ STEP 8 — Academic interpretation
 ======================================================================
 
   ACCURACY:
-    96.80% on enriched multi-parameter classification.
+    95.73% on enriched multi-parameter classification.
     Non-trivial accuracy with non-zero FP/FN confirms the model is doing real
     statistical work, not memorising a single-feature rule.
 
-  RECALL (anomaly detection rate): 0.9371
+  RECALL (anomaly detection rate): 0.9200
     Strong — catches the large majority of real anomalies.
     For water quality monitoring, recall is the most critical metric.
     A missed pollution event has direct public health consequences.
 
   FEATURE IMPORTANCE:
-    DO_mgl : 0.5263
-    pH     : 0.4737
-    TDS_mgl: 0.0000
+    DO_mgl : 0.4655
+    pH     : 0.3772
+    TDS_mgl: 0.1571
     DO dominance REDUCED — pH and TDS contribute meaningfully. Multi-parameter learning CONFIRMED.
 
   CONFUSION MATRIX:
-    FP = 1  (normal readings flagged as anomaly — false alarms)
-    FN = 11  (real anomalies missed — the more dangerous error)
+    FP = 2  (normal readings flagged as anomaly — false alarms)
+    FN = 14  (real anomalies missed — the more dangerous error)
     Non-zero FP and FN confirmed — model is NOT trivially classifying.
 
-  AUC: 0.9661
+  AUC: 0.9564
     Excellent discriminability across all classification thresholds.
 
 
@@ -158,25 +185,25 @@ STEP 8 — Academic interpretation
 STEP 9 — Saving full evaluation report
 ======================================================================
   ACCURACY:
-    96.80% on enriched multi-parameter classification.
+    95.73% on enriched multi-parameter classification.
     Non-trivial accuracy with non-zero FP/FN confirms the model is doing real
     statistical work, not memorising a single-feature rule.
 
-  RECALL (anomaly detection rate): 0.9371
+  RECALL (anomaly detection rate): 0.9200
     Strong — catches the large majority of real anomalies.
     For water quality monitoring, recall is the most critical metric.
     A missed pollution event has direct public health consequences.
 
   FEATURE IMPORTANCE:
-    DO_mgl : 0.5263
-    pH     : 0.4737
-    TDS_mgl: 0.0000
+    DO_mgl : 0.4655
+    pH     : 0.3772
+    TDS_mgl: 0.1571
     DO dominance REDUCED — pH and TDS contribute meaningfully. Multi-parameter learning CONFIRMED.
 
   CONFUSION MATRIX:
-    FP = 1  (normal readings flagged as anomaly — false alarms)
-    FN = 11  (real anomalies missed — the more dangerous error)
+    FP = 2  (normal readings flagged as anomaly — false alarms)
+    FN = 14  (real anomalies missed — the more dangerous error)
     Non-zero FP and FN confirmed — model is NOT trivially classifying.
 
-  AUC: 0.9661
+  AUC: 0.9564
     Excellent discriminability across all classification thresholds.

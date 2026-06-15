@@ -1,0 +1,28 @@
+Model B — Enriched v5 Dataset
+============================================================
+Accuracy : 0.9573
+Precision: 0.9877
+Recall   : 0.9200
+F1       : 0.9527
+ROC-AUC  : 0.9564
+
+Confusion Matrix:
+  TN=198  FP=2
+  FN=14  TP=161
+
+Feature Importance:
+  DO_mgl           0.4655
+  pH               0.3772
+  TDS_mgl          0.1571
+  temperature_C    0.0002
+
+Classification Report:
+              precision    recall  f1-score   support
+
+      Normal       0.93      0.99      0.96       200
+     Anomaly       0.99      0.92      0.95       175
+
+    accuracy                           0.96       375
+   macro avg       0.96      0.96      0.96       375
+weighted avg       0.96      0.96      0.96       375
+
